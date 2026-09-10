@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase/client";
+import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Ραντεβού" },
@@ -16,8 +15,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const router = useRouter();
 
   async function handleLogout() {
-    await fetch("/api/admin/session", { method: "DELETE" });
-    await signOut(getFirebaseAuth());
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.replace("/admin/login");
     router.refresh();
   }

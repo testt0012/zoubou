@@ -1,28 +1,21 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET() {
-  try {
-    const snap = await adminDb
-      .collection("services")
-      .where("active", "==", true)
-      .orderBy("sort_order", "asc")
-      .get();
+  const supabase = createAdminClient();
 
-    const services = snap.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        name: data.name,
-        duration_minutes: data.duration_minutes,
-      };
-    });
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, name, duration_minutes")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
 
-    return NextResponse.json({ services });
-  } catch {
+  if (error) {
     return NextResponse.json(
       { error: "Σφάλμα φόρτωσης υπηρεσιών." },
       { status: 500 }
     );
   }
+
+  return NextResponse.json({ services: data });
 }

@@ -1,14 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/firebase/server";
+import { requireAdmin } from "@/lib/supabase/server";
 
 const PATH = "/admin/availability";
 
 export async function addAvailabilityRule(formData: FormData) {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const weekday = Number(formData.get("weekday"));
   const start_time = String(formData.get("start_time") ?? "");
   const end_time = String(formData.get("end_time") ?? "");
@@ -24,26 +22,21 @@ export async function addAvailabilityRule(formData: FormData) {
     return;
   }
 
-  await adminDb.collection("availabilityRules").add({
-    weekday,
-    start_time,
-    end_time,
-    created_at: FieldValue.serverTimestamp(),
-  });
+  await supabase.from("availability_rules").insert({ weekday, start_time, end_time });
   revalidatePath(PATH);
 }
 
 export async function deleteAvailabilityRule(formData: FormData) {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  await adminDb.collection("availabilityRules").doc(id).delete();
+  await supabase.from("availability_rules").delete().eq("id", id);
   revalidatePath(PATH);
 }
 
 export async function addBlockedSlot(formData: FormData) {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const date = String(formData.get("date") ?? "");
   const start_time = String(formData.get("start_time") ?? "");
   const end_time = String(formData.get("end_time") ?? "");
@@ -51,27 +44,21 @@ export async function addBlockedSlot(formData: FormData) {
 
   if (!date || !start_time || !end_time || start_time >= end_time) return;
 
-  await adminDb.collection("blockedSlots").add({
-    date,
-    start_time,
-    end_time,
-    reason,
-    created_at: FieldValue.serverTimestamp(),
-  });
+  await supabase.from("blocked_slots").insert({ date, start_time, end_time, reason });
   revalidatePath(PATH);
 }
 
 export async function deleteBlockedSlot(formData: FormData) {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  await adminDb.collection("blockedSlots").doc(id).delete();
+  await supabase.from("blocked_slots").delete().eq("id", id);
   revalidatePath(PATH);
 }
 
 export async function updateSettings(formData: FormData) {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const slot_granularity_minutes = Number(formData.get("slot_granularity_minutes"));
   const buffer_minutes = Number(formData.get("buffer_minutes"));
 
@@ -84,10 +71,10 @@ export async function updateSettings(formData: FormData) {
     return;
   }
 
-  await adminDb
-    .collection("settings")
-    .doc("config")
-    .set({ slot_granularity_minutes, buffer_minutes }, { merge: true });
+  await supabase
+    .from("settings")
+    .update({ slot_granularity_minutes, buffer_minutes })
+    .eq("id", true);
 
   revalidatePath(PATH);
 }

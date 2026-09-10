@@ -1,4 +1,4 @@
-import { adminDb } from "@/lib/firebase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { athensNow, minutesToTime, timeToMinutes, weekdayOf } from "@/lib/time";
 
 interface Interval {
@@ -10,15 +10,12 @@ function overlaps(a: Interval, b: Interval): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
-export type SlotError = "service_not_found";
+export type SlotError = "service_not_found" | "invalid_date";
 
 export interface SlotsResult {
   slots: string[];
   serviceDurationMinutes: number;
 }
-
-const DEFAULT_GRANULARITY_MINUTES = 30;
-const DEFAULT_BUFFER_MINUTES = 0;
 
 /**
  * Computes bookable start times ("HH:MM") for a given service on a given
@@ -27,52 +24,60 @@ const DEFAULT_BUFFER_MINUTES = 0;
  * stepped at the admin-configured slot granularity, and never in the past.
  *
  * Used both by GET /api/slots (to show clients options) and by POST /api/book
- * (to re-validate the chosen slot server-side before the transactional
- * insert) — the per-time-bucket lock documents created in that transaction
- * are the final, authoritative race-condition guard; this function is what
- * makes the UI/validation actually usable.
+ * (to re-validate the chosen slot server-side before insert) — the exclusion
+ * constraint in the database is the final, authoritative race-condition guard,
+ * this function is what makes the UI/validation actually usable.
  */
 export async function computeAvailableSlots(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any, any, any>,
   serviceId: string,
   date: string
 ): Promise<SlotsResult | { error: SlotError }> {
-  const serviceSnap = await adminDb.collection("services").doc(serviceId).get();
-  const service = serviceSnap.data();
+  const { data: service, error: serviceError } = await supabase
+    .from("services")
+    .select("id, duration_minutes, active")
+    .eq("id", serviceId)
+    .eq("active", true)
+    .maybeSingle();
 
-  if (!serviceSnap.exists || !service || service.active !== true) {
+  if (serviceError || !service) {
     return { error: "service_not_found" };
   }
 
   const duration = service.duration_minutes as number;
 
-  const [settingsSnap, rulesSnap, blockedSnap, bookedSnap] = await Promise.all([
-    adminDb.collection("settings").doc("config").get(),
-    adminDb.collection("availabilityRules").where("weekday", "==", weekdayOf(date)).get(),
-    adminDb.collection("blockedSlots").where("date", "==", date).get(),
-    adminDb
-      .collection("appointments")
-      .where("date", "==", date)
-      .where("status", "==", "confirmed")
-      .get(),
-  ]);
+  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }] =
+    await Promise.all([
+      supabase.from("settings").select("*").eq("id", true).maybeSingle(),
+      supabase
+        .from("availability_rules")
+        .select("start_time, end_time")
+        .eq("weekday", weekdayOf(date)),
+      supabase.from("blocked_slots").select("start_time, end_time").eq("date", date),
+      supabase
+        .from("appointments")
+        .select("start_time, end_time")
+        .eq("date", date)
+        .eq("status", "confirmed"),
+    ]);
 
-  const settings = settingsSnap.data();
-  const granularity = settings?.slot_granularity_minutes ?? DEFAULT_GRANULARITY_MINUTES;
-  const buffer = settings?.buffer_minutes ?? DEFAULT_BUFFER_MINUTES;
+  const granularity = settings?.slot_granularity_minutes ?? 30;
+  const buffer = settings?.buffer_minutes ?? 0;
 
-  const windows: Interval[] = rulesSnap.docs.map((doc) => ({
-    start: timeToMinutes(doc.data().start_time),
-    end: timeToMinutes(doc.data().end_time),
+  const windows: Interval[] = (rules ?? []).map((r) => ({
+    start: timeToMinutes(r.start_time),
+    end: timeToMinutes(r.end_time),
   }));
 
   const busy: Interval[] = [
-    ...blockedSnap.docs.map((doc) => ({
-      start: timeToMinutes(doc.data().start_time),
-      end: timeToMinutes(doc.data().end_time),
+    ...(blocked ?? []).map((b) => ({
+      start: timeToMinutes(b.start_time),
+      end: timeToMinutes(b.end_time),
     })),
-    ...bookedSnap.docs.map((doc) => ({
-      start: timeToMinutes(doc.data().start_time) - buffer,
-      end: timeToMinutes(doc.data().end_time) + buffer,
+    ...(booked ?? []).map((a) => ({
+      start: timeToMinutes(a.start_time) - buffer,
+      end: timeToMinutes(a.end_time) + buffer,
     })),
   ];
 

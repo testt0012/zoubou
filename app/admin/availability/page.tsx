@@ -1,5 +1,4 @@
-import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/firebase/server";
+import { requireAdmin } from "@/lib/supabase/server";
 import AdminShell from "@/components/admin/AdminShell";
 import {
   addAvailabilityRule,
@@ -14,30 +13,26 @@ import type { AvailabilityRule, BlockedSlot, Settings } from "@/types/database";
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0]; // Monday..Sunday for display order
 
 export default async function AdminAvailabilityPage() {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
 
-  const [rulesSnap, blockedSnap, settingsSnap] = await Promise.all([
-    adminDb.collection("availabilityRules").get(),
-    adminDb.collection("blockedSlots").get(),
-    adminDb.collection("settings").doc("config").get(),
+  const [{ data: rules }, { data: blocked }, { data: settings }] = await Promise.all([
+    supabase
+      .from("availability_rules")
+      .select("*")
+      .order("weekday", { ascending: true })
+      .order("start_time", { ascending: true }),
+    supabase.from("blocked_slots").select("*").order("date", { ascending: true }),
+    supabase.from("settings").select("*").eq("id", true).maybeSingle(),
   ]);
 
-  const rules = rulesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as AvailabilityRule[];
-  const blocked = (blockedSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as BlockedSlot[]).sort(
-    (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
-  );
-
   const rulesByWeekday = new Map<number, AvailabilityRule[]>();
-  for (const r of rules) {
+  for (const r of (rules ?? []) as AvailabilityRule[]) {
     const list = rulesByWeekday.get(r.weekday) ?? [];
     list.push(r);
     rulesByWeekday.set(r.weekday, list);
   }
-  for (const list of rulesByWeekday.values()) {
-    list.sort((a, b) => (a.start_time < b.start_time ? -1 : 1));
-  }
 
-  const s = settingsSnap.data() as Settings | undefined;
+  const s = settings as Settings | null;
 
   return (
     <AdminShell>
@@ -92,7 +87,7 @@ export default async function AdminAvailabilityPage() {
 
       <h2 className="text-base font-semibold mb-3">Κλειστές ημέρες / ώρες</h2>
       <div className="flex flex-col gap-2 mb-4">
-        {blocked.map((b: BlockedSlot) => (
+        {(blocked ?? []).map((b: BlockedSlot) => (
           <div
             key={b.id}
             className="border border-neutral-200 rounded-lg px-4 py-3 flex items-center justify-between text-sm"
@@ -112,7 +107,7 @@ export default async function AdminAvailabilityPage() {
             </form>
           </div>
         ))}
-        {blocked.length === 0 && (
+        {(blocked ?? []).length === 0 && (
           <p className="text-sm text-neutral-400">Δεν υπάρχουν καταχωρήσεις.</p>
         )}
       </div>

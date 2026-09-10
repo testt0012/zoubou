@@ -1,21 +1,20 @@
-import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/firebase/server";
+import { requireAdmin } from "@/lib/supabase/server";
 import AdminShell from "@/components/admin/AdminShell";
 import CancelAppointmentButton from "@/components/admin/CancelAppointmentButton";
 import { formatDateLong, todayAthens } from "@/lib/time";
-import type { Appointment } from "@/types/database";
+import type { AppointmentWithService } from "@/types/database";
 
 export default async function AdminDashboardPage() {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const today = todayAthens();
 
-  const snap = await adminDb
-    .collection("appointments")
-    .orderBy("date", "asc")
-    .orderBy("start_time", "asc")
-    .get();
+  const { data: appointments } = await supabase
+    .from("appointments")
+    .select("*, services(id, name, duration_minutes)")
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true });
 
-  const all = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Appointment[];
+  const all = (appointments ?? []) as AppointmentWithService[];
   const upcoming = all.filter((a) => a.status === "confirmed" && a.date >= today);
   const history = all
     .filter((a) => a.status === "cancelled" || a.date < today)
@@ -52,7 +51,7 @@ function AppointmentRow({
   appointment,
   showCancel,
 }: {
-  appointment: Appointment;
+  appointment: AppointmentWithService;
   showCancel?: boolean;
 }) {
   return (
@@ -64,7 +63,7 @@ function AppointmentRow({
         <div className="text-neutral-500">{formatDateLong(appointment.date)}</div>
         <div className="text-neutral-500">
           {appointment.start_time.slice(0, 5)} – {appointment.end_time.slice(0, 5)} ·{" "}
-          {appointment.service_name}
+          {appointment.services?.name ?? "—"}
         </div>
         <a href={`tel:${appointment.mobile}`} className="text-brand-purple">
           {appointment.mobile}

@@ -1,21 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/firebase/server";
-import { releaseBookingLocks } from "@/lib/booking";
+import { requireAdmin } from "@/lib/supabase/server";
 
 export async function cancelAppointment(formData: FormData) {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
   const id = formData.get("id");
-  if (typeof id !== "string" || !id) return;
+  if (typeof id !== "string") return;
 
-  const ref = adminDb.collection("appointments").doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) return;
-
-  await ref.update({ status: "cancelled" });
-  await releaseBookingLocks(snap.data()?.lock_ids ?? []);
-
+  await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
   revalidatePath("/admin/dashboard");
 }

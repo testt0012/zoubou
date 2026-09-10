@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableSlots } from "@/lib/slots";
 import { isValidDateString } from "@/lib/validation";
 import { todayAthens } from "@/lib/time";
@@ -18,7 +19,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ slots: [] });
   }
 
-  const result = await computeAvailableSlots(serviceId, date);
+  const supabase = createAdminClient();
+  const result = await computeAvailableSlots(supabase, serviceId, date);
 
   if ("error" in result) {
     return NextResponse.json(

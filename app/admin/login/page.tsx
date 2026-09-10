@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -18,24 +17,17 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError(null);
 
-    try {
-      const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
-      const idToken = await credential.user.getIdToken();
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-      const res = await fetch("/api/admin/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-
-      if (!res.ok) throw new Error("session");
-
-      router.replace("/admin/dashboard");
-      router.refresh();
-    } catch {
+    if (error) {
       setError("Λάθος στοιχεία σύνδεσης.");
       setLoading(false);
+      return;
     }
+
+    router.replace("/admin/dashboard");
+    router.refresh();
   }
 
   return (

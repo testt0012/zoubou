@@ -1,39 +1,54 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { adminAuth } from "@/lib/firebase/admin";
-import { SESSION_COOKIE_NAME } from "@/lib/firebase/server";
 
 // Protects the admin area. Clients never hit anything under /admin — this
-// proxy is the single gate: no valid session -> bounce to /admin/login, and
-// an already-logged-in admin visiting /admin/login goes straight through
-// to the dashboard.
+// proxy is the single gate: no session -> bounce to /admin/login, and an
+// already-logged-in admin visiting /admin/login goes straight through to
+// the dashboard.
 export async function proxy(request: NextRequest) {
-  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname === "/admin/login";
 
-  let authenticated = false;
-  if (sessionCookie) {
-    try {
-      await adminAuth.verifySessionCookie(sessionCookie, false);
-      authenticated = true;
-    } catch {
-      authenticated = false;
-    }
-  }
-
-  if (!authenticated && !isLoginPage) {
+  if (!user && pathname.startsWith("/admin") && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/login";
     return NextResponse.redirect(url);
   }
 
-  if (authenticated && isLoginPage) {
+  if (user && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/dashboard";
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {

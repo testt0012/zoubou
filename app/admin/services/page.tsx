@@ -1,13 +1,16 @@
-import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/firebase/server";
+import { requireAdmin } from "@/lib/supabase/server";
 import AdminShell from "@/components/admin/AdminShell";
 import { createService, toggleServiceActive, updateService } from "@/lib/actions/services";
 import type { Service } from "@/types/database";
 
 export default async function AdminServicesPage() {
-  await requireAdmin();
-  const snap = await adminDb.collection("services").orderBy("sort_order", "asc").get();
-  const services = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Service[];
+  const { supabase } = await requireAdmin();
+  const { data } = await supabase
+    .from("services")
+    .select("*")
+    .order("sort_order", { ascending: true });
+
+  const services = (data ?? []) as Service[];
 
   return (
     <AdminShell>

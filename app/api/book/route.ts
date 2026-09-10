@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableSlots } from "@/lib/slots";
-import { createBookingTransactional } from "@/lib/booking";
 import {
   isValidDateString,
   isValidTimeString,
@@ -11,7 +9,7 @@ import {
 } from "@/lib/validation";
 import { minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MINUTES = 10;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
 
 function getClientIp(request: NextRequest): string {
@@ -34,30 +32,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Μη έγκυρο αίτημα." }, { status: 400 });
   }
 
+  const supabase = createAdminClient();
   const ip = getClientIp(request);
-  const windowStart = Date.now() - RATE_LIMIT_WINDOW_MS;
 
-  const recentAttempts = await adminDb
-    .collection("bookingRateLimits")
-    .where("ip", "==", ip)
-    .limit(20)
-    .get();
+  const windowStart = new Date(
+    Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000
+  ).toISOString();
 
-  const attemptsInWindow = recentAttempts.docs.filter((doc) => {
-    const createdAt = doc.data().created_at?.toMillis?.() ?? 0;
-    return createdAt >= windowStart;
-  });
+  const { count } = await supabase
+    .from("booking_rate_limits")
+    .select("id", { count: "exact", head: true })
+    .eq("ip", ip)
+    .gte("created_at", windowStart);
 
-  if (attemptsInWindow.length >= RATE_LIMIT_MAX_ATTEMPTS) {
+  if ((count ?? 0) >= RATE_LIMIT_MAX_ATTEMPTS) {
     return NextResponse.json(
       { error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." },
       { status: 429 }
     );
   }
 
-  await adminDb
-    .collection("bookingRateLimits")
-    .add({ ip, created_at: FieldValue.serverTimestamp() });
+  await supabase.from("booking_rate_limits").insert({ ip });
 
   const serviceId = body.serviceId;
   const date = body.date;
@@ -96,13 +91,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const serviceSnap = await adminDb.collection("services").doc(serviceId).get();
-  const service = serviceSnap.data();
-  if (!serviceSnap.exists || !service) {
-    return NextResponse.json({ error: "Η υπηρεσία δεν βρέθηκε." }, { status: 404 });
-  }
-
-  const result = await computeAvailableSlots(serviceId, date);
+  const result = await computeAvailableSlots(supabase, serviceId, date);
   if ("error" in result) {
     return NextResponse.json({ error: "Η υπηρεσία δεν βρέθηκε." }, { status: 404 });
   }
@@ -121,37 +110,39 @@ export async function POST(request: NextRequest) {
     timeToMinutes(startTime) + result.serviceDurationMinutes
   );
 
-  const booking = await createBookingTransactional({
-    serviceId,
-    serviceName: service.name,
-    date,
-    startTime,
-    endTime,
-    firstName,
-    lastName,
-    mobile,
-  });
+  const { data: appointment, error: insertError } = await supabase
+    .from("appointments")
+    .insert({
+      service_id: serviceId,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      first_name: firstName,
+      last_name: lastName,
+      mobile,
+    })
+    .select("id, date, start_time, end_time, services(name)")
+    .single();
 
-  if (!booking.ok) {
+  if (insertError) {
+    // 23P01 = exclusion_violation: another booking grabbed this exact/
+    // overlapping slot in the moment between our availability check and
+    // the insert. This is the authoritative race-condition guard.
+    if (insertError.code === "23P01") {
+      return NextResponse.json(
+        {
+          error: "Η ώρα αυτή μόλις κλείστηκε από κάποιον άλλον. Επιλέξτε άλλη ώρα.",
+          code: "SLOT_UNAVAILABLE",
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
-      {
-        error: "Η ώρα αυτή μόλις κλείστηκε από κάποιον άλλον. Επιλέξτε άλλη ώρα.",
-        code: "SLOT_UNAVAILABLE",
-      },
-      { status: 409 }
+      { error: "Σφάλμα κατά τη δημιουργία του ραντεβού." },
+      { status: 500 }
     );
   }
 
-  return NextResponse.json(
-    {
-      appointment: {
-        id: booking.appointmentId,
-        date,
-        start_time: startTime,
-        end_time: endTime,
-        services: { name: service.name },
-      },
-    },
-    { status: 201 }
-  );
+  return NextResponse.json({ appointment }, { status: 201 });
 }
