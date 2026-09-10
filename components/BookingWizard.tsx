@@ -201,7 +201,7 @@ export default function BookingWizard() {
             width={900}
             height={300}
             priority
-            className="h-12 w-auto"
+            className="w-full max-w-[360px] h-auto"
           />
         </div>
       )}

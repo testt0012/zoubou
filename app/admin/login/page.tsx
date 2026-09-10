@@ -42,7 +42,13 @@ export default function AdminLoginPage() {
     <div className="flex-1 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg shadow-black/20 px-6 py-8">
         <div className="flex justify-center mb-6">
-          <Image src="/logo.png" alt="Zoubou" width={900} height={300} className="h-12 w-auto" />
+          <Image
+            src="/logo.png"
+            alt="Zoubou"
+            width={900}
+            height={300}
+            className="w-full max-w-[280px] h-auto"
+          />
         </div>
         <h1 className="text-lg font-semibold text-center mb-6">Σύνδεση διαχειριστή</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
