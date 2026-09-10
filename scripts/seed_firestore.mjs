@@ -37,6 +37,24 @@ async function main() {
   } else {
     console.log("Services collection already has data, skipping.");
   }
+
+  const existingRules = await db.collection("availabilityRules").limit(1).get();
+  if (existingRules.empty) {
+    const batch = db.batch();
+    for (let weekday = 0; weekday <= 6; weekday++) {
+      const ref = db.collection("availabilityRules").doc();
+      batch.set(ref, {
+        weekday,
+        start_time: "09:00",
+        end_time: "17:00",
+        created_at: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    console.log("Seeded test availability: every day 09:00–17:00.");
+  } else {
+    console.log("Availability rules already exist, skipping.");
+  }
 }
 
 main()

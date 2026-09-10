@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Calendar from "@/components/Calendar";
 import { formatDateLong, todayAthens } from "@/lib/time";
+
+const ADMIN_TAP_THRESHOLD = 5;
+const ADMIN_TAP_RESET_MS = 1200;
 
 interface Service {
   id: string;
@@ -23,10 +27,31 @@ interface ConfirmedAppointment {
 }
 
 export default function BookingWizard() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("intro");
   const [services, setServices] = useState<Service[] | null>(null);
   const [servicesError, setServicesError] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+
+  const logoTapCount = useRef(0);
+  const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hidden admin entry point: tap the logo a few times in a row to reach the
+  // login page without a visible "admin" link anywhere in the public UI.
+  function handleLogoTap() {
+    logoTapCount.current += 1;
+    if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
+
+    if (logoTapCount.current >= ADMIN_TAP_THRESHOLD) {
+      logoTapCount.current = 0;
+      router.push("/admin/login");
+      return;
+    }
+
+    logoTapTimer.current = setTimeout(() => {
+      logoTapCount.current = 0;
+    }, ADMIN_TAP_RESET_MS);
+  }
 
   const today = todayAthens();
   const [selectedDate, setSelectedDate] = useState<string>(today);
@@ -207,7 +232,8 @@ export default function BookingWizard() {
             width={900}
             height={300}
             priority
-            className="w-full max-w-[280px] h-auto mx-auto mb-8"
+            onClick={handleLogoTap}
+            className="w-full max-w-[280px] h-auto mx-auto mb-8 select-none"
           />
           <button
             onClick={startBooking}
