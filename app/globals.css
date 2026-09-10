@@ -3,24 +3,46 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --color-purple: #6d28d9;
+  --color-purple-dark: #4c1d95;
+  --color-pink: #e6198f;
+  --color-pink-light: #fce7f3;
+  --color-border: #e5e7eb;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand-purple: var(--color-purple);
+  --color-brand-purple-dark: var(--color-purple-dark);
+  --color-brand-pink: var(--color-pink);
+  --color-brand-pink-light: var(--color-pink-light);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
-  background: var(--background);
+  background: url("/background.jpg") top center / cover no-repeat fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* On phone-width screens, "cover" crops most of the photo's width down to a
+   thin vertical strip — position it so the "BARBER" sign stays in frame
+   instead of the plain wall. */
+@media (max-width: 640px) {
+  body {
+    background-position: 65% top;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  /* background-attachment: fixed is unreliable on iOS Safari */
+  body {
+    background-attachment: scroll;
+  }
+}
+
+/* Plain, flat, minimal-motion by design — this app favors reliability over polish. */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
