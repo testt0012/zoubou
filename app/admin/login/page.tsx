@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { getFirebaseAuth } from "@/lib/firebase/client";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function AdminLoginPage() {
     setError(null);
 
     try {
-      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
       const idToken = await credential.user.getIdToken();
 
       const res = await fetch("/api/admin/session", {

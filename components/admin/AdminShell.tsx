@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { getFirebaseAuth } from "@/lib/firebase/client";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Ραντεβού" },
@@ -17,7 +17,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   async function handleLogout() {
     await fetch("/api/admin/session", { method: "DELETE" });
-    await signOut(auth);
+    await signOut(getFirebaseAuth());
     router.replace("/admin/login");
     router.refresh();
   }

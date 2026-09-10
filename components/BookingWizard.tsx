@@ -233,7 +233,7 @@ export default function BookingWizard() {
             height={300}
             priority
             onClick={handleLogoTap}
-            className="w-full max-w-[280px] h-auto mx-auto mb-8 select-none"
+            className="w-full max-w-[360px] h-auto mx-auto mb-8 select-none"
           />
           <button
             onClick={startBooking}
