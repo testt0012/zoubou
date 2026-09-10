@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
+import InstallPrompt from "@/components/InstallPrompt";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-white text-neutral-900">
         <RegisterServiceWorker />
         {children}
+        <InstallPrompt />
       </body>
     </html>
   );
