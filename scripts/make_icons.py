@@ -13,10 +13,6 @@ os.makedirs(ICONS_DIR, exist_ok=True)
 
 src = Image.open(SRC).convert("RGB")
 
-# --- App icon mark: the "Z" + scissors glyph, cropped from the wordmark ---
-mark_box = (228, 95, 582, 632)
-mark = src.crop(mark_box)
-
 WHITE = (255, 255, 255)
 
 
@@ -33,17 +29,17 @@ def square_pad(img: Image.Image, target: int, content_ratio: float) -> Image.Ima
     return canvas
 
 
-# Standard icons: content nearly fills the canvas.
-square_pad(mark, 512, 0.92).save(os.path.join(ICONS_DIR, "icon-512.png"))
-square_pad(mark, 192, 0.92).save(os.path.join(ICONS_DIR, "icon-192.png"))
-square_pad(mark, 180, 0.92).save(os.path.join(ICONS_DIR, "apple-touch-icon.png"))
+# Standard icons: the full logo, content nearly fills the canvas width.
+square_pad(src, 512, 0.92).save(os.path.join(ICONS_DIR, "icon-512.png"))
+square_pad(src, 192, 0.92).save(os.path.join(ICONS_DIR, "icon-192.png"))
+square_pad(src, 180, 0.92).save(os.path.join(ICONS_DIR, "apple-touch-icon.png"))
 
 # Maskable icon: OS may crop to a circle, so keep content inside the ~80% safe zone.
-square_pad(mark, 512, 0.6).save(os.path.join(ICONS_DIR, "icon-maskable-512.png"))
+square_pad(src, 512, 0.6).save(os.path.join(ICONS_DIR, "icon-maskable-512.png"))
 
 # Favicon: small multi-resolution .ico (must be RGBA or Next's image
 # processing fails to decode it)
-favicon_src = square_pad(mark, 256, 0.92).convert("RGBA")
+favicon_src = square_pad(src, 256, 0.92).convert("RGBA")
 favicon_src.save(
     os.path.join(ROOT, "app", "favicon.ico"),
     sizes=[(16, 16), (32, 32), (48, 48)],

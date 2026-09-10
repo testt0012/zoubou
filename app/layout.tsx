@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Zoubou | Ραντεβού Κουρείου",
+  title: "Zoubou | Barber",
   description: "Κλείστε ραντεβού online στο κουρείο Zoubou.",
   manifest: "/manifest.webmanifest",
   icons: {
