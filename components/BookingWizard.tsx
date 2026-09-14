@@ -207,6 +207,7 @@ export default function BookingWizard() {
     // Keep the pre-selection when there's only one service — otherwise the
     // intro CTA would need a redundant "pick a service" step again.
     setSelectedService(services && services.length === 1 ? services[0] : null);
+    setSelectedDate(todayAthens());
     setSelectedSlot(null);
     setSlots(null);
     setFirstName("");
@@ -231,25 +232,6 @@ export default function BookingWizard() {
           />
         </div>
       )}
-      {step !== "intro" && step !== "confirmed" && (
-        <ol className="flex items-center justify-center gap-2 mb-6 text-sm">
-          {(["service", "slot", "form"] as Step[]).map((s, i) => (
-            <li key={s} className="flex items-center gap-2">
-              <span
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
-                  step === s
-                    ? "bg-brand-purple text-white"
-                    : "bg-neutral-200 text-neutral-500"
-                }`}
-              >
-                {i + 1}
-              </span>
-              {i < 2 && <span className="w-4 h-px bg-neutral-300" />}
-            </li>
-          ))}
-        </ol>
-      )}
-
       {step === "intro" && (
         <section
           className={`text-center py-4 transition-opacity duration-300 ${

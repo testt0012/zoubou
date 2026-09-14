@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/supabase/server";
 
 export async function createService(formData: FormData) {
@@ -22,8 +21,6 @@ export async function createService(formData: FormData) {
     duration_minutes: duration,
     sort_order: (existing?.sort_order ?? 0) + 1,
   });
-
-  revalidatePath("/admin/services");
 }
 
 export async function updateService(formData: FormData) {
@@ -38,16 +35,17 @@ export async function updateService(formData: FormData) {
     .from("services")
     .update({ name, duration_minutes: duration })
     .eq("id", id);
-
-  revalidatePath("/admin/services");
 }
 
-export async function toggleServiceActive(formData: FormData) {
+export async function deleteService(formData: FormData) {
   const { supabase } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
-  const active = formData.get("active") === "true";
   if (!id) return;
 
-  await supabase.from("services").update({ active: !active }).eq("id", id);
-  revalidatePath("/admin/services");
+  const { error } = await supabase.from("services").delete().eq("id", id);
+  if (error) {
+    // Existing appointments reference this service (FK constraint) — keep
+    // the row so their history stays intact, just hide it going forward.
+    await supabase.from("services").update({ active: false }).eq("id", id);
+  }
 }

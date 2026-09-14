@@ -1,11 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/supabase/server";
 import { eachDate } from "@/lib/time";
 import { isValidDateString } from "@/lib/validation";
 
-const PATH = "/admin/availability";
 const MAX_BLOCKED_RANGE_DAYS = 366;
 
 export async function addAvailabilityRule(formData: FormData) {
@@ -26,7 +24,6 @@ export async function addAvailabilityRule(formData: FormData) {
   }
 
   await supabase.from("availability_rules").insert({ weekday, start_time, end_time });
-  revalidatePath(PATH);
 }
 
 // Same time range, every day of the week at once — for the common "open
@@ -40,7 +37,6 @@ export async function addAvailabilityRuleAllDays(formData: FormData) {
 
   const rows = Array.from({ length: 7 }, (_, weekday) => ({ weekday, start_time, end_time }));
   await supabase.from("availability_rules").insert(rows);
-  revalidatePath(PATH);
 }
 
 export async function updateAvailabilityRule(formData: FormData) {
@@ -52,7 +48,6 @@ export async function updateAvailabilityRule(formData: FormData) {
   if (!id || !start_time || !end_time || start_time >= end_time) return;
 
   await supabase.from("availability_rules").update({ start_time, end_time }).eq("id", id);
-  revalidatePath(PATH);
 }
 
 export async function deleteAvailabilityRule(formData: FormData) {
@@ -61,7 +56,6 @@ export async function deleteAvailabilityRule(formData: FormData) {
   if (!id) return;
 
   await supabase.from("availability_rules").delete().eq("id", id);
-  revalidatePath(PATH);
 }
 
 // Accepts a date range ("Από" / "Έως") rather than a single day, so a
@@ -94,7 +88,6 @@ export async function addBlockedSlot(formData: FormData) {
   await supabase
     .from("blocked_slots")
     .insert(dates.map((date) => ({ date, start_time, end_time, reason })));
-  revalidatePath(PATH);
 }
 
 export async function deleteBlockedSlot(formData: FormData) {
@@ -103,5 +96,4 @@ export async function deleteBlockedSlot(formData: FormData) {
   if (!id) return;
 
   await supabase.from("blocked_slots").delete().eq("id", id);
-  revalidatePath(PATH);
 }

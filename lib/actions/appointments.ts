@@ -1,9 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/supabase/server";
 import { isValidDateString, isValidTimeString, normalizeGreekMobile, sanitizeName } from "@/lib/validation";
 import { minutesToTime, timeToMinutes } from "@/lib/time";
+import { computeAvailableSlots } from "@/lib/slots";
 
 // Called directly from client code (not a <form action>) so the UI can
 // show an inline "Ακυρώθηκε — Αναίρεση" undo affordance instead of a
@@ -11,22 +11,30 @@ import { minutesToTime, timeToMinutes } from "@/lib/time";
 export async function cancelAppointment(id: string) {
   const { supabase } = await requireAdmin();
   await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
-  revalidatePath("/admin/dashboard");
-  revalidatePath("/admin/reports");
 }
 
 export async function uncancelAppointment(id: string) {
   const { supabase } = await requireAdmin();
   await supabase.from("appointments").update({ status: "confirmed" }).eq("id", id);
-  revalidatePath("/admin/dashboard");
-  revalidatePath("/admin/reports");
 }
 
-// Lets the admin add a walk-in / phone booking directly. The database's
-// exclusion constraint (appointments_no_overlap) still protects against
-// double-booking even here — the insert silently fails if the slot has
-// meanwhile been taken, same as every other admin form in this file.
-export async function createManualAppointment(formData: FormData) {
+export interface CreateManualAppointmentResult {
+  success: boolean;
+  error?: string;
+}
+
+// Lets the admin add a walk-in / phone booking directly. The slot dropdown
+// in the UI already only offers times computeAvailableSlots approves (open
+// hours, not blocked, not already booked), but a server action is directly
+// callable regardless of what the client sent — so it's re-checked here too,
+// the same way POST /api/book re-checks before inserting. The database's
+// exclusion constraint (appointments_no_overlap) is the last-resort guard
+// for the remaining race (another booking landing between this check and
+// the insert) — reported back to the caller instead of failing silently, so
+// the form can tell the admin the slot was just taken.
+export async function createManualAppointment(
+  formData: FormData
+): Promise<CreateManualAppointmentResult> {
   const { supabase } = await requireAdmin();
 
   const serviceId = String(formData.get("service_id") ?? "");
@@ -49,20 +57,19 @@ export async function createManualAppointment(formData: FormData) {
     !lastName ||
     (mobileRaw && !mobile)
   ) {
-    return;
+    return { success: false, error: "Συμπληρώστε σωστά όλα τα στοιχεία." };
   }
 
-  const { data: service } = await supabase
-    .from("services")
-    .select("duration_minutes")
-    .eq("id", serviceId)
-    .maybeSingle();
+  const result = await computeAvailableSlots(supabase, serviceId, date);
+  if ("error" in result) return { success: false, error: "Η υπηρεσία δεν βρέθηκε." };
 
-  if (!service) return;
+  if (!result.slots.includes(startTime)) {
+    return { success: false, error: "Η ώρα αυτή δεν είναι διαθέσιμη. Επιλέξτε άλλη ώρα." };
+  }
 
-  const endTime = minutesToTime(timeToMinutes(startTime) + service.duration_minutes);
+  const endTime = minutesToTime(timeToMinutes(startTime) + result.serviceDurationMinutes);
 
-  await supabase.from("appointments").insert({
+  const { error } = await supabase.from("appointments").insert({
     service_id: serviceId,
     date,
     start_time: startTime,
@@ -72,5 +79,12 @@ export async function createManualAppointment(formData: FormData) {
     mobile,
   });
 
-  revalidatePath("/admin/dashboard");
+  if (error) {
+    if (error.code === "23P01") {
+      return { success: false, error: "Η ώρα αυτή μόλις κλείστηκε. Επιλέξτε άλλη ώρα." };
+    }
+    return { success: false, error: "Σφάλμα κατά τη δημιουργία του ραντεβού." };
+  }
+
+  return { success: true };
 }

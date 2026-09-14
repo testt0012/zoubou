@@ -25,6 +25,7 @@ export default function ManualAppointmentForm({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [isSubmitting, startTransition] = useTransition();
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // The modal unmounts the form entirely when closed, so this effect
   // (unlike its old <details>-based version) already only fetches while
@@ -67,15 +68,21 @@ export default function ManualAppointmentForm({
   function handleOpen() {
     setServiceId(services[0]?.id ?? "");
     setDate(defaultDate);
+    setSubmitError(null);
     setOpen(true);
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    setSubmitError(null);
     startTransition(async () => {
-      await createManualAppointment(formData);
-      setOpen(false);
+      const result = await createManualAppointment(formData);
+      if (result.success) {
+        setOpen(false);
+      } else {
+        setSubmitError(result.error ?? "Κάτι πήγε στραβά.");
+      }
     });
   }
 
@@ -215,6 +222,8 @@ export default function ManualAppointmentForm({
                   className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm"
                 />
               </div>
+
+              {submitError && <p className="text-red-600 text-sm">{submitError}</p>}
 
               <button
                 type="submit"

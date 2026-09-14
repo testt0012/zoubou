@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 30000;
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -12,9 +15,38 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
+
+  // Client-side deterrent against repeated guessing from this browser —
+  // Supabase Auth itself already rate-limits sign-in attempts server-side
+  // per IP, this just gives immediate, visible feedback instead of relying
+  // on that alone.
+  useEffect(() => {
+    if (!lockedUntil) return;
+
+    const tick = () => {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockedUntil(null);
+        setFailedAttempts(0);
+        setLockSecondsLeft(0);
+      } else {
+        setLockSecondsLeft(remaining);
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [lockedUntil]);
+
+  const isLocked = lockedUntil !== null && lockSecondsLeft > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isLocked) return;
     setLoading(true);
     setError(null);
 
@@ -22,6 +54,13 @@ export default function AdminLoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
+      const nextAttempts = failedAttempts + 1;
+      if (nextAttempts >= MAX_ATTEMPTS) {
+        setLockedUntil(Date.now() + LOCKOUT_MS);
+        setFailedAttempts(0);
+      } else {
+        setFailedAttempts(nextAttempts);
+      }
       setError("Λάθος στοιχεία σύνδεσης.");
       setLoading(false);
       return;
@@ -74,10 +113,15 @@ export default function AdminLoginPage() {
               className="w-full border border-neutral-300 rounded-md px-3 py-2 focus:outline-none focus:border-brand-purple"
             />
           </div>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && !isLocked && <p className="text-red-600 text-sm">{error}</p>}
+          {isLocked && (
+            <p className="text-red-600 text-sm">
+              Πολλές αποτυχημένες προσπάθειες. Δοκιμάστε ξανά σε {lockSecondsLeft}s.
+            </p>
+          )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || isLocked}
             className="mt-2 w-full bg-brand-purple text-white rounded-md py-3 font-medium disabled:opacity-60"
           >
             {loading ? "Σύνδεση…" : "Σύνδεση"}

@@ -10,6 +10,15 @@ import { ADMIN_NAV } from "@/components/admin/adminNav";
 
 const SWIPE_THRESHOLD_PX = 60;
 
+function LogoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  );
+}
+
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -66,9 +75,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             />
             <button
               onClick={handleLogout}
-              className="text-sm text-neutral-400 hover:text-neutral-700 whitespace-nowrap"
+              aria-label="Έξοδος"
+              title="Έξοδος"
+              className="flex items-center justify-center w-9 h-9 rounded-md text-neutral-400 hover:text-neutral-700"
             >
-              Έξοδος
+              <LogoutIcon />
             </button>
           </div>
           {loading ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { cancelAppointment, uncancelAppointment } from "@/lib/actions/appointments";
 import type { AppointmentWithService } from "@/types/database";
 
@@ -22,6 +22,7 @@ export default function AppointmentRow({
   const [cancelled, setCancelled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [, startTransition] = useTransition();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleCancel() {
     setCancelled(true);
@@ -29,11 +30,15 @@ export default function AppointmentRow({
     startTransition(() => {
       cancelAppointment(appointment.id);
     });
-    window.setTimeout(() => setHidden(true), UNDO_WINDOW_MS);
+    hideTimer.current = setTimeout(() => setHidden(true), UNDO_WINDOW_MS);
   }
 
   function handleUndo() {
     setCancelled(false);
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
     startTransition(() => {
       uncancelAppointment(appointment.id);
     });

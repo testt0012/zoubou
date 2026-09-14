@@ -1,101 +1,59 @@
 "use client";
 
 import SlideTransition from "@/components/admin/SlideTransition";
+import ServiceRow from "@/components/admin/ServiceRow";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
-import { createService, toggleServiceActive, updateService } from "@/lib/actions/services";
+import { createService } from "@/lib/actions/services";
 
 export default function AdminServicesPage() {
   const { services } = useAdminData();
+  const activeServices = services.filter((s) => s.active);
 
   return (
     <SlideTransition>
       <h1 className="text-lg font-semibold mb-4">Υπηρεσίες</h1>
 
       <div className="flex flex-col gap-3 mb-8">
-        {services.map((s) => (
-          <div
-            key={s.id}
-            className="border border-neutral-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
-          >
-            <form
-              action={updateService}
-              className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3"
-            >
-              <input type="hidden" name="id" value={s.id} />
-              <input
-                name="name"
-                defaultValue={s.name}
-                required
-                className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
-              />
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  name="duration_minutes"
-                  defaultValue={s.duration_minutes}
-                  min={1}
-                  max={480}
-                  required
-                  className="w-24 border border-neutral-300 rounded-md px-3 py-2"
-                />
-                <span className="text-sm text-neutral-500">λεπτά</span>
-              </div>
-              <button
-                type="submit"
-                className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
-              >
-                Αποθήκευση
-              </button>
-            </form>
-            <ToggleActiveButton id={s.id} active={s.active} />
-          </div>
+        {activeServices.map((s) => (
+          <ServiceRow key={s.id} service={s} />
         ))}
-        {services.length === 0 && (
+        {activeServices.length === 0 && (
           <p className="text-neutral-500 text-sm">Δεν υπάρχουν υπηρεσίες ακόμα.</p>
         )}
       </div>
 
-      <h2 className="text-base font-semibold mb-3">Νέα υπηρεσία</h2>
-      <form action={createService} className="flex flex-col sm:flex-row gap-3">
-        <input
-          name="name"
-          placeholder="π.χ. Παιδικό κούρεμα"
-          required
-          className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
-        />
-        <input
-          type="number"
-          name="duration_minutes"
-          placeholder="Λεπτά"
-          min={1}
-          max={480}
-          required
-          className="w-full sm:w-28 border border-neutral-300 rounded-md px-3 py-2"
-        />
-        <button
-          type="submit"
-          className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+      <details className="group border border-neutral-200 rounded-lg">
+        <summary className="px-4 py-3 cursor-pointer select-none list-none flex items-center justify-between text-sm font-medium text-brand-purple">
+          Νέα υπηρεσία
+          <span className="text-neutral-400 transition-transform group-open:rotate-45">+</span>
+        </summary>
+        <form
+          action={createService}
+          className="px-4 pb-4 pt-3 border-t border-neutral-100 flex flex-col sm:flex-row gap-3"
         >
-          Προσθήκη
-        </button>
-      </form>
+          <input
+            name="name"
+            placeholder="π.χ. Παιδικό κούρεμα"
+            required
+            className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
+          />
+          <input
+            type="number"
+            name="duration_minutes"
+            placeholder="Λεπτά"
+            min={1}
+            max={480}
+            required
+            className="w-full sm:w-28 border border-neutral-300 rounded-md px-3 py-2"
+          />
+          <button
+            type="submit"
+            className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+          >
+            Προσθήκη
+          </button>
+        </form>
+      </details>
     </SlideTransition>
-  );
-}
-
-function ToggleActiveButton({ id, active }: { id: string; active: boolean }) {
-  return (
-    <form action={toggleServiceActive}>
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="active" value={String(active)} />
-      <button
-        type="submit"
-        className={`text-sm rounded-md px-3 py-2 border ${
-          active ? "border-neutral-300 text-neutral-600" : "border-brand-purple text-brand-purple"
-        }`}
-      >
-        {active ? "Απενεργοποίηση" : "Ενεργοποίηση"}
-      </button>
-    </form>
   );
 }
