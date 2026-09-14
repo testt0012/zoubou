@@ -12,9 +12,9 @@ export default function BottomNav() {
   );
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="max-w-3xl mx-auto px-4">
-        <div className="relative flex bg-brand-purple/90 backdrop-blur rounded-full p-1 shadow-lg shadow-black/25">
+    <nav className="fixed inset-x-0 bottom-0 z-40 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="max-w-3xl mx-auto px-4 flex justify-center">
+        <div className="relative flex w-full max-w-[280px] bg-brand-purple/20 backdrop-blur rounded-full p-1 shadow-lg shadow-black/25">
           <div
             aria-hidden="true"
             className="absolute inset-y-1 rounded-full bg-brand-pink transition-transform duration-300 ease-out"
@@ -31,7 +31,7 @@ export default function BottomNav() {
                 href={item.href}
                 aria-label={item.label}
                 transitionTypes={transitionTypeBetween(pathname, item.href)}
-                className="relative z-10 flex-1 flex items-center justify-center py-3 rounded-full text-white transition-transform active:scale-95"
+                className="relative z-10 flex-1 flex items-center justify-center py-2 rounded-full text-white transition-transform active:scale-95"
               >
                 <Icon />
               </Link>

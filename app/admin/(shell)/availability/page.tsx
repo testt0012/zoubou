@@ -59,7 +59,7 @@ export default async function AdminAvailabilityPage() {
                 <p className="text-sm text-neutral-400">Κλειστά</p>
               )}
             </div>
-            <form action={addAvailabilityRule} className="flex items-center gap-2">
+            <form action={addAvailabilityRule} className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="weekday" value={weekday} />
               <input
                 type="time"
