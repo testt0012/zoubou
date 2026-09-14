@@ -5,13 +5,21 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { isValidDateString, isValidTimeString, normalizeGreekMobile, sanitizeName } from "@/lib/validation";
 import { minutesToTime, timeToMinutes } from "@/lib/time";
 
-export async function cancelAppointment(formData: FormData) {
+// Called directly from client code (not a <form action>) so the UI can
+// show an inline "Ακυρώθηκε — Αναίρεση" undo affordance instead of a
+// blocking confirm() dialog.
+export async function cancelAppointment(id: string) {
   const { supabase } = await requireAdmin();
-  const id = formData.get("id");
-  if (typeof id !== "string") return;
-
   await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
   revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/reports");
+}
+
+export async function uncancelAppointment(id: string) {
+  const { supabase } = await requireAdmin();
+  await supabase.from("appointments").update({ status: "confirmed" }).eq("id", id);
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/reports");
 }
 
 // Lets the admin add a walk-in / phone booking directly. The database's

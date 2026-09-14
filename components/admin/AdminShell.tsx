@@ -5,7 +5,8 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BottomNav from "@/components/admin/BottomNav";
-import { ADMIN_NAV, transitionTypeBetween } from "@/components/admin/adminNav";
+import RealtimeRefresh from "@/components/admin/RealtimeRefresh";
+import { ADMIN_NAV } from "@/components/admin/adminNav";
 
 const SWIPE_THRESHOLD_PX = 60;
 
@@ -43,11 +44,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const target = ADMIN_NAV[deltaX < 0 ? currentIndex + 1 : currentIndex - 1];
     if (!target) return;
 
-    router.push(target.href, { transitionTypes: transitionTypeBetween(pathname, target.href) });
+    router.push(target.href);
   }
 
   return (
     <div className="flex-1 flex flex-col">
+      <RealtimeRefresh />
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-6 pb-28">
         <div
           onTouchStart={handleTouchStart}

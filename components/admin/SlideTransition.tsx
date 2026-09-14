@@ -1,24 +1,45 @@
-import { ViewTransition } from "react";
+"use client";
 
-// Wraps a page's content so navigating between admin tabs slides it in the
-// direction of travel (tagged via `transitionTypes` on the Link/router.push
-// that triggered the navigation — see adminNav.tsx). Untagged navigations
-// (refresh, direct load) get no animation.
+import { useState } from "react";
+import { usePathname } from "next/navigation";
+import { ADMIN_NAV } from "@/components/admin/adminNav";
+
+// Plays a directional slide-in animation on the incoming tab's content.
 //
-// The extra inner <div> matters: ViewTransition needs ONE element to treat
-// as the transition boundary. Handing it several top-level siblings (an
-// <h1> plus a handful of <div>s) left each one animating as its own
-// independent participant, so mid-transition you'd see leftover pieces of
-// the previous page's elements floating over the new ones instead of one
-// clean swap.
+// This used to be React's built-in <ViewTransition> (matching old and new
+// page snapshots and animating between them), but Safari's implementation
+// of the underlying View Transitions API renders it broken on real
+// iPhones: the old tab's content stays visible, overlapping the new one,
+// for a chunk of the animation. Chromium doesn't show the bug, which is
+// why it slipped through earlier testing.
+//
+// A plain CSS mount animation sidesteps the whole class of bug: there's
+// only ever one page's content in the DOM (React unmounts the old one
+// before the new one mounts, as normal), so there's nothing for a stale
+// snapshot to overlap.
 export default function SlideTransition({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  const [direction, setDirection] = useState<"forward" | "back" | null>(null);
+
+  // Deriving state from a prop change during render — see
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  if (prevPathname !== pathname) {
+    const prevIndex = ADMIN_NAV.findIndex((item) => item.href === prevPathname);
+    const currentIndex = ADMIN_NAV.findIndex((item) => item.href === pathname);
+    setDirection(
+      prevIndex !== -1 && currentIndex !== -1 && currentIndex !== prevIndex
+        ? currentIndex > prevIndex
+          ? "forward"
+          : "back"
+        : null
+    );
+    setPrevPathname(pathname);
+  }
+
   return (
-    <ViewTransition
-      enter={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "none" }}
-      exit={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "none" }}
-      default="none"
-    >
-      <div>{children}</div>
-    </ViewTransition>
+    <div key={pathname} className={direction ? `admin-slide-${direction}` : undefined}>
+      {children}
+    </div>
   );
 }

@@ -63,65 +63,38 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Directional slide between admin tabs (bottom-nav tap or swipe) — see
-   components/admin/SlideTransition.tsx and adminNav.tsx. */
-::view-transition {
-  /* Keep the page interactive while a transition plays. */
-  pointer-events: none;
-}
-
+/* Directional slide-in for the incoming admin tab (bottom-nav tap or
+   swipe) — see components/admin/SlideTransition.tsx. Plain CSS mount
+   animation, not the View Transitions API: Safari's implementation of
+   that API left the outgoing tab's content visibly overlapping the
+   incoming one for part of the animation. */
 :root {
   --transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-::view-transition-old(.nav-forward) {
-  --slide-offset: -24px;
-  animation:
-    160ms ease-in both view-fade reverse,
-    320ms var(--transition-ease) both view-slide reverse;
+.admin-slide-forward {
+  animation: admin-slide-in 320ms var(--transition-ease) both;
+  --admin-slide-offset: 24px;
 }
-::view-transition-new(.nav-forward) {
-  --slide-offset: 24px;
-  animation:
-    220ms ease-out 90ms both view-fade,
-    320ms var(--transition-ease) both view-slide;
+.admin-slide-back {
+  animation: admin-slide-in 320ms var(--transition-ease) both;
+  --admin-slide-offset: -24px;
 }
 
-::view-transition-old(.nav-back) {
-  --slide-offset: 24px;
-  animation:
-    160ms ease-in both view-fade reverse,
-    320ms var(--transition-ease) both view-slide reverse;
-}
-::view-transition-new(.nav-back) {
-  --slide-offset: -24px;
-  animation:
-    220ms ease-out 90ms both view-fade,
-    320ms var(--transition-ease) both view-slide;
-}
-
-@keyframes view-fade {
+@keyframes admin-slide-in {
   from {
     opacity: 0;
+    translate: var(--admin-slide-offset);
   }
   to {
     opacity: 1;
-  }
-}
-@keyframes view-slide {
-  from {
-    translate: var(--slide-offset);
-  }
-  to {
     translate: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-group(*) {
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
+  .admin-slide-forward,
+  .admin-slide-back {
+    animation-duration: 0s;
   }
 }
