@@ -1,97 +1,109 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { requireAdmin } from "@/lib/supabase/server";
+import { useSearchParams } from "next/navigation";
 import SlideTransition from "@/components/admin/SlideTransition";
 import AppointmentRow from "@/components/admin/AppointmentRow";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { createClient } from "@/lib/supabase/client";
 import { addDays, eachDate, formatDateLong, formatDateShort, startOfWeek, todayAthens } from "@/lib/time";
 import { bookedMinutesForDate, occupancyPercent, workingMinutesForDate } from "@/lib/occupancy";
 import { isValidDateString } from "@/lib/validation";
-import type { AppointmentWithService, AvailabilityRule, BlockedSlot } from "@/types/database";
+import type { AppointmentWithService, BlockedSlot } from "@/types/database";
 
 const MAX_REPORT_DAYS = 366;
 const SHORT_WEEKDAYS = ["Δε", "Τρ", "Τε", "Πε", "Πα", "Σα", "Κυ"];
 
-function pick(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+interface RangeReport {
+  from: string;
+  to: string;
+  bookedHours: number;
+  workingHours: number;
+  percent: number;
 }
 
-export default async function AdminReportsPage(props: PageProps<"/admin/reports">) {
-  const searchParams = await props.searchParams;
-  const { supabase } = await requireAdmin();
+export default function AdminReportsPage() {
+  const searchParams = useSearchParams();
+  const { availabilityRules, blockedSlots, appointments, ensureAppointmentsRange } = useAdminData();
   const today = todayAthens();
 
-  const view = pick(searchParams.calView) === "day" ? "day" : "week";
-  const rawCalDate = pick(searchParams.calDate);
+  const view = searchParams.get("calView") === "day" ? "day" : "week";
+  const rawCalDate = searchParams.get("calDate");
   const calDate = rawCalDate && isValidDateString(rawCalDate) ? rawCalDate : today;
 
   const rangeStart = view === "week" ? startOfWeek(calDate) : calDate;
   const rangeEnd = view === "week" ? addDays(rangeStart, 6) : calDate;
   const rangeDates = eachDate(rangeStart, rangeEnd);
 
-  const [{ data: rules }, { data: blocked }, { data: appointments }] = await Promise.all([
-    supabase.from("availability_rules").select("weekday, start_time, end_time"),
-    supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", rangeStart).lte("date", rangeEnd),
-    supabase
-      .from("appointments")
-      .select("*, services(id, name, duration_minutes)")
-      .eq("status", "confirmed")
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd)
-      .order("start_time", { ascending: true }),
-  ]);
+  useEffect(() => {
+    ensureAppointmentsRange(rangeStart, rangeEnd);
+  }, [rangeStart, rangeEnd, ensureAppointmentsRange]);
 
-  const rulesList = (rules ?? []) as AvailabilityRule[];
-  const blockedList = (blocked ?? []) as BlockedSlot[];
-  const appointmentsList = (appointments ?? []) as AppointmentWithService[];
+  // Custom-range occupancy report ("από/έως" -> % booked hours vs. working
+  // hours). Kept as its own on-demand fetch — it can target historical
+  // dates outside the forward-looking cache window, and it's an explicit
+  // "calculate" action anyway, so a moment's fetch is expected.
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [report, setReport] = useState<RangeReport | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
 
-  // Custom-range occupancy report ("από/έως" -> % booked hours vs. working hours).
-  const rawFrom = pick(searchParams.reportFrom);
-  const rawTo = pick(searchParams.reportTo);
-  let report: { bookedHours: number; workingHours: number; percent: number } | null = null;
-  let reportError: string | null = null;
+  async function handleReportSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setReport(null);
+    setReportError(null);
 
-  if (rawFrom || rawTo) {
-    if (!isValidDateString(rawFrom) || !isValidDateString(rawTo) || rawFrom > rawTo) {
-      reportError = "Επιλέξτε έγκυρο εύρος ημερομηνιών.";
-    } else {
-      const spanDays =
-        Math.round(
-          (new Date(`${rawTo}T00:00:00Z`).getTime() - new Date(`${rawFrom}T00:00:00Z`).getTime()) / 86400000
-        ) + 1;
-
-      if (spanDays > MAX_REPORT_DAYS) {
-        reportError = "Το εύρος είναι πολύ μεγάλο.";
-      } else {
-        const [{ data: reportBlocked }, { data: reportAppointments }] = await Promise.all([
-          supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", rawFrom).lte("date", rawTo),
-          supabase
-            .from("appointments")
-            .select("date, start_time, end_time")
-            .eq("status", "confirmed")
-            .gte("date", rawFrom)
-            .lte("date", rawTo),
-        ]);
-
-        const reportBlockedList = (reportBlocked ?? []) as BlockedSlot[];
-        const reportAppointmentsList = (reportAppointments ?? []) as {
-          date: string;
-          start_time: string;
-          end_time: string;
-        }[];
-
-        let workingMinutes = 0;
-        let bookedMinutes = 0;
-        for (const d of eachDate(rawFrom, rawTo)) {
-          workingMinutes += workingMinutesForDate(rulesList, reportBlockedList, d);
-          bookedMinutes += bookedMinutesForDate(reportAppointmentsList, d);
-        }
-
-        report = {
-          workingHours: Math.round((workingMinutes / 60) * 10) / 10,
-          bookedHours: Math.round((bookedMinutes / 60) * 10) / 10,
-          percent: occupancyPercent(bookedMinutes, workingMinutes),
-        };
-      }
+    if (!isValidDateString(reportFrom) || !isValidDateString(reportTo) || reportFrom > reportTo) {
+      setReportError("Επιλέξτε έγκυρο εύρος ημερομηνιών.");
+      return;
     }
+
+    const spanDays =
+      Math.round(
+        (new Date(`${reportTo}T00:00:00Z`).getTime() - new Date(`${reportFrom}T00:00:00Z`).getTime()) / 86400000
+      ) + 1;
+
+    if (spanDays > MAX_REPORT_DAYS) {
+      setReportError("Το εύρος είναι πολύ μεγάλο.");
+      return;
+    }
+
+    setReportLoading(true);
+    const supabase = createClient();
+    const [{ data: reportBlocked }, { data: reportAppointments }] = await Promise.all([
+      supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", reportFrom).lte("date", reportTo),
+      supabase
+        .from("appointments")
+        .select("date, start_time, end_time")
+        .eq("status", "confirmed")
+        .gte("date", reportFrom)
+        .lte("date", reportTo),
+    ]);
+    setReportLoading(false);
+
+    const reportBlockedList = (reportBlocked ?? []) as BlockedSlot[];
+    const reportAppointmentsList = (reportAppointments ?? []) as {
+      date: string;
+      start_time: string;
+      end_time: string;
+    }[];
+
+    let workingMinutes = 0;
+    let bookedMinutes = 0;
+    for (const d of eachDate(reportFrom, reportTo)) {
+      workingMinutes += workingMinutesForDate(availabilityRules, reportBlockedList, d);
+      bookedMinutes += bookedMinutesForDate(reportAppointmentsList, d);
+    }
+
+    setReport({
+      from: reportFrom,
+      to: reportTo,
+      workingHours: Math.round((workingMinutes / 60) * 10) / 10,
+      bookedHours: Math.round((bookedMinutes / 60) * 10) / 10,
+      percent: occupancyPercent(bookedMinutes, workingMinutes),
+    });
   }
 
   return (
@@ -159,8 +171,8 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
           {view === "week" ? (
             <div className="grid grid-cols-7 gap-1">
               {rangeDates.map((d, i) => {
-                const working = workingMinutesForDate(rulesList, blockedList, d);
-                const booked = bookedMinutesForDate(appointmentsList, d);
+                const working = workingMinutesForDate(availabilityRules, blockedSlots, d);
+                const booked = bookedMinutesForDate(appointments, d);
                 const percent = occupancyPercent(booked, working);
                 const isToday = d === today;
                 return (
@@ -187,10 +199,10 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
           ) : (
             <DaySchedule
               date={calDate}
-              appointments={appointmentsList}
+              appointments={appointments}
               percent={occupancyPercent(
-                bookedMinutesForDate(appointmentsList, calDate),
-                workingMinutesForDate(rulesList, blockedList, calDate)
+                bookedMinutesForDate(appointments, calDate),
+                workingMinutesForDate(availabilityRules, blockedSlots, calDate)
               )}
             />
           )}
@@ -198,10 +210,7 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
 
         <section>
           <h2 className="text-base font-semibold mb-3">Ποσοστό πληρότητας για διάστημα</h2>
-          <form
-            method="GET"
-            className="border border-neutral-200 rounded-lg px-4 py-3 flex flex-wrap items-end gap-3"
-          >
+          <form onSubmit={handleReportSubmit} className="border border-neutral-200 rounded-lg px-4 py-3 flex flex-wrap items-end gap-3">
             <div>
               <label htmlFor="reportFrom" className="block text-sm font-medium mb-1">
                 Από
@@ -209,9 +218,9 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
               <input
                 id="reportFrom"
                 type="date"
-                name="reportFrom"
-                defaultValue={rawFrom}
                 required
+                value={reportFrom}
+                onChange={(e) => setReportFrom(e.target.value)}
                 className="border border-neutral-300 rounded-md px-3 py-2 text-sm"
               />
             </div>
@@ -222,17 +231,18 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
               <input
                 id="reportTo"
                 type="date"
-                name="reportTo"
-                defaultValue={rawTo}
                 required
+                value={reportTo}
+                onChange={(e) => setReportTo(e.target.value)}
                 className="border border-neutral-300 rounded-md px-3 py-2 text-sm"
               />
             </div>
             <button
               type="submit"
-              className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+              disabled={reportLoading}
+              className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
-              Υπολογισμός
+              {reportLoading ? "Υπολογισμός…" : "Υπολογισμός"}
             </button>
           </form>
 
@@ -244,7 +254,7 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
               <div className="text-sm text-neutral-500">
                 {report.bookedHours} ώρες κλεισμένες από {report.workingHours} ώρες λειτουργίας
                 <br />
-                {formatDateLong(rawFrom as string)} – {formatDateLong(rawTo as string)}
+                {formatDateLong(report.from)} – {formatDateLong(report.to)}
               </div>
             </div>
           )}
@@ -283,9 +293,9 @@ function DaySchedule({
       {dayAppointments.length === 0 ? (
         <p className="text-neutral-500 text-sm">Δεν υπάρχουν ραντεβού αυτή την ημέρα.</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {dayAppointments.map((a) => (
-            <AppointmentRow key={a.id} appointment={a} />
+        <div className="grid grid-cols-3 gap-1.5">
+          {dayAppointments.map((a, i) => (
+            <AppointmentRow key={a.id} appointment={a} index={i} />
           ))}
         </div>
       )}

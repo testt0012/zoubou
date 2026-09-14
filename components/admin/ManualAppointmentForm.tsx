@@ -131,7 +131,7 @@ export default function ManualAppointmentForm({
               </div>
 
               <div className="flex gap-3">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <label htmlFor="date" className="block text-sm font-medium mb-1">
                     Ημερομηνία
                   </label>
@@ -143,10 +143,10 @@ export default function ManualAppointmentForm({
                     min={minDate}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm"
+                    className="w-full min-w-0 border border-neutral-300 rounded-md px-2 py-2 text-sm"
                   />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <label htmlFor="start_time" className="block text-sm font-medium mb-1">
                     Ώρα
                   </label>
@@ -157,7 +157,7 @@ export default function ManualAppointmentForm({
                     disabled={!hasSlots}
                     value={selectedSlot}
                     onChange={(e) => setSelectedSlot(e.target.value)}
-                    className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm disabled:text-neutral-400"
+                    className="w-full min-w-0 border border-neutral-300 rounded-md px-2 py-2 text-sm disabled:text-neutral-400"
                   >
                     <option value="" disabled>
                       {loadingSlots

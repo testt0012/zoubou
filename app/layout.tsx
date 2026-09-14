@@ -47,7 +47,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="el" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-white text-neutral-900">
+      <body className="min-h-full flex flex-col text-neutral-900">
+        <div className="app-background fixed inset-0 -z-10" aria-hidden="true" />
         <RegisterServiceWorker />
         {children}
         <InstallPrompt />

@@ -60,7 +60,7 @@ export default function AppointmentRow({
         type="button"
         onClick={() => setModalOpen(true)}
         className={`rounded-lg px-1 py-2 flex flex-col items-center gap-0.5 active:opacity-70 ${
-          index % 2 === 0 ? "bg-brand-purple/10" : "bg-brand-pink/10"
+          index % 2 === 0 ? "bg-brand-purple/25" : "bg-brand-pink/25"
         }`}
       >
         <span className="text-sm font-semibold text-brand-purple">

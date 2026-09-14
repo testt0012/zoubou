@@ -25,36 +25,30 @@
   --font-sans: var(--font-geist-sans);
 }
 
-/* Set on both html and body — elastic overscroll (rubber-band bounce on
-   iOS, and similar overscroll-glow rendering elsewhere) can expose either
-   box beyond the page's own content, and without this it briefly shows
-   through as plain white. Matching backgrounds on both means there's
-   nothing to flash. */
-html,
-body {
-  background: url("/background.jpg") top center / cover no-repeat fixed;
-}
-
 body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* A fixed, viewport-pinned layer (rendered in app/layout.tsx, behind
+   everything via -z-10) instead of a background on html/body. Sizing a
+   background to the document box left gaps whenever the page was shorter
+   than the viewport, or during the moment content height changed (route
+   transitions, mobile browsers collapsing their address bar) — a
+   position:fixed element is always exactly the viewport size, so there's
+   nothing left uncovered regardless of content height. This also sidesteps
+   the old "background-attachment: fixed is unreliable on iOS Safari" issue
+   entirely, since it never uses that CSS property. */
+.app-background {
+  background: url("/background.jpg") top center / cover no-repeat;
 }
 
 /* On phone-width screens, "cover" crops most of the photo's width down to a
    thin vertical strip — position it so the "BARBER" sign stays in frame
    instead of the plain wall. */
 @media (max-width: 640px) {
-  html,
-  body {
+  .app-background {
     background-position: 65% top;
-  }
-}
-
-@supports (-webkit-touch-callout: none) {
-  /* background-attachment: fixed is unreliable on iOS Safari */
-  html,
-  body {
-    background-attachment: scroll;
   }
 }
 

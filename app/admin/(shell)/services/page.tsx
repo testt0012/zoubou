@@ -1,16 +1,11 @@
-import { requireAdmin } from "@/lib/supabase/server";
+"use client";
+
 import SlideTransition from "@/components/admin/SlideTransition";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { createService, toggleServiceActive, updateService } from "@/lib/actions/services";
-import type { Service } from "@/types/database";
 
-export default async function AdminServicesPage() {
-  const { supabase } = await requireAdmin();
-  const { data } = await supabase
-    .from("services")
-    .select("*")
-    .order("sort_order", { ascending: true });
-
-  const services = (data ?? []) as Service[];
+export default function AdminServicesPage() {
+  const { services } = useAdminData();
 
   return (
     <SlideTransition>

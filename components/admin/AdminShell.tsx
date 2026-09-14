@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BottomNav from "@/components/admin/BottomNav";
-import RealtimeRefresh from "@/components/admin/RealtimeRefresh";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { ADMIN_NAV } from "@/components/admin/adminNav";
 
 const SWIPE_THRESHOLD_PX = 60;
@@ -14,6 +14,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
   const touchStartX = useRef<number | null>(null);
+  const { loading } = useAdminData();
 
   async function handleLogout() {
     const supabase = createClient();
@@ -49,7 +50,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex-1 flex flex-col">
-      <RealtimeRefresh />
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-6 pb-28">
         <div
           onTouchStart={handleTouchStart}
@@ -62,7 +62,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               alt="Zoubou"
               width={900}
               height={300}
-              className="h-9 w-auto"
+              className="h-12 w-auto"
             />
             <button
               onClick={handleLogout}
@@ -71,7 +71,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               Έξοδος
             </button>
           </div>
-          {children}
+          {loading ? (
+            <div className="py-16 text-center text-neutral-400 text-sm">Φόρτωση δεδομένων…</div>
+          ) : (
+            children
+          )}
         </div>
       </main>
       <BottomNav />

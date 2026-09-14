@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AdminLoginPage() {
@@ -33,6 +34,9 @@ export default function AdminLoginPage() {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg shadow-black/20 px-6 py-8">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-brand-purple mb-4">
+          ← Πίσω
+        </Link>
         <div className="flex justify-center mb-6">
           <Image
             src="/logo.png"

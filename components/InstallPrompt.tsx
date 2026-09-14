@@ -66,14 +66,14 @@ export default function InstallPrompt() {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-40 mx-auto max-w-sm rounded-xl bg-white shadow-lg shadow-black/25 border border-neutral-200 px-4 py-3 flex items-center gap-3">
+    <div className="fixed inset-x-4 bottom-4 z-40 mx-auto max-w-sm rounded-xl bg-brand-purple text-white shadow-lg shadow-black/25 px-4 py-3 flex items-center gap-3">
       <div className="flex-1 text-sm">
         {platform === "ios" ? (
           <p>
-            Προσθέστε το Zoubou στην αρχική οθόνη: πατήστε{" "}
-            <span className="font-medium">Κοινοποίηση</span>{" "}
+            Προσθέστε το Zoubou στην οθόνη αφετηρίας: πατήστε{" "}
+            <span className="font-medium">Κοινή Χρήση</span>{" "}
             <span aria-hidden="true">⬆️</span> και μετά{" "}
-            <span className="font-medium">«Προσθήκη στην Αρχική Οθόνη»</span>.
+            <span className="font-medium">«Προσθήκη στην Οθόνη Αφετηρίας»</span>.
           </p>
         ) : (
           <p>Εγκαταστήστε το Zoubou στο κινητό σας για γρήγορη πρόσβαση.</p>
@@ -82,7 +82,7 @@ export default function InstallPrompt() {
       {platform === "android" && (
         <button
           onClick={handleInstallClick}
-          className="shrink-0 bg-brand-purple text-white text-sm font-medium rounded-md px-3 py-2"
+          className="shrink-0 bg-white text-brand-purple text-sm font-medium rounded-md px-3 py-2"
         >
           Εγκατάσταση
         </button>
@@ -90,7 +90,7 @@ export default function InstallPrompt() {
       <button
         onClick={dismiss}
         aria-label="Κλείσιμο"
-        className="shrink-0 text-neutral-400 text-lg leading-none px-1"
+        className="shrink-0 text-white/70 hover:text-white text-lg leading-none px-1"
       >
         ×
       </button>
