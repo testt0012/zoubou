@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  /* Without this, phones in system dark mode auto-theme native controls
+     (date/time pickers, <select>, text inputs) to dark chrome regardless
+     of our own light CSS — the classic "input text is invisible on
+     mobile" bug. Pin the whole app to light so those stay readable. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
   --color-purple: #6d28d9;

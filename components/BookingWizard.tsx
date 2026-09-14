@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Calendar from "@/components/Calendar";
-import { formatDateLong, todayAthens } from "@/lib/time";
+import { athensDateTimeToUTC, formatDateLong, todayAthens } from "@/lib/time";
+import { buildICS } from "@/lib/ics";
 
-const ADMIN_TAP_THRESHOLD = 5;
-const ADMIN_TAP_RESET_MS = 1200;
+const ADMIN_HOLD_MS = 3000;
 
 interface Service {
   id: string;
@@ -18,6 +18,7 @@ interface Service {
 type Step = "intro" | "service" | "slot" | "form" | "confirmed";
 
 interface ConfirmedAppointment {
+  id: string;
   date: string;
   start_time: string;
   end_time: string;
@@ -33,24 +34,27 @@ export default function BookingWizard() {
   const [servicesError, setServicesError] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
 
-  const logoTapCount = useRef(0);
-  const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [logoPressing, setLogoPressing] = useState(false);
+  const [enteringAdmin, setEnteringAdmin] = useState(false);
+  const logoHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hidden admin entry point: tap the logo a few times in a row to reach the
+  // Hidden admin entry point: press and hold the logo for 3s to reach the
   // login page without a visible "admin" link anywhere in the public UI.
-  function handleLogoTap() {
-    logoTapCount.current += 1;
-    if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
+  function startLogoHold() {
+    if (enteringAdmin) return;
+    setLogoPressing(true);
+    logoHoldTimer.current = setTimeout(() => {
+      setEnteringAdmin(true);
+      setTimeout(() => router.push("/admin/login"), 300);
+    }, ADMIN_HOLD_MS);
+  }
 
-    if (logoTapCount.current >= ADMIN_TAP_THRESHOLD) {
-      logoTapCount.current = 0;
-      router.push("/admin/login");
-      return;
+  function cancelLogoHold() {
+    setLogoPressing(false);
+    if (logoHoldTimer.current) {
+      clearTimeout(logoHoldTimer.current);
+      logoHoldTimer.current = null;
     }
-
-    logoTapTimer.current = setTimeout(() => {
-      logoTapCount.current = 0;
-    }, ADMIN_TAP_RESET_MS);
   }
 
   const today = todayAthens();
@@ -67,6 +71,27 @@ export default function BookingWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<ConfirmedAppointment | null>(null);
+
+  // Object URL for the "add to calendar" .ics download — derived from
+  // `confirmed`, not stored as state; a separate effect just revokes the
+  // previous one whenever a new one is created or the component unmounts.
+  const icsUrl = useMemo(() => {
+    if (!confirmed) return null;
+    const ics = buildICS({
+      uid: confirmed.id,
+      start: athensDateTimeToUTC(confirmed.date, confirmed.start_time),
+      end: athensDateTimeToUTC(confirmed.date, confirmed.end_time),
+      summary: `${confirmed.serviceName} – Zoubou`,
+      description: `Ραντεβού για ${confirmed.serviceName} στο κουρείο Zoubou.`,
+    });
+    return URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+  }, [confirmed]);
+
+  useEffect(() => {
+    return () => {
+      if (icsUrl) URL.revokeObjectURL(icsUrl);
+    };
+  }, [icsUrl]);
 
   useEffect(() => {
     fetch("/api/services")
@@ -161,6 +186,7 @@ export default function BookingWizard() {
       }
 
       setConfirmed({
+        id: data.appointment.id,
         date: data.appointment.date,
         start_time: data.appointment.start_time,
         end_time: data.appointment.end_time,
@@ -225,16 +251,46 @@ export default function BookingWizard() {
       )}
 
       {step === "intro" && (
-        <section className="text-center py-4">
-          <Image
-            src="/logo.png"
-            alt="Zoubou"
-            width={900}
-            height={300}
-            priority
-            onClick={handleLogoTap}
-            className="w-full max-w-[360px] h-auto mx-auto mb-8 select-none"
-          />
+        <section
+          className={`text-center py-4 transition-opacity duration-300 ${
+            enteringAdmin ? "opacity-0" : "opacity-100"
+          }`}
+        >
+          <div
+            className="inline-block select-none [-webkit-touch-callout:none] mb-3"
+            onPointerDown={startLogoHold}
+            onPointerUp={cancelLogoHold}
+            onPointerLeave={cancelLogoHold}
+            onPointerCancel={cancelLogoHold}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <Image
+              src="/logo.png"
+              alt="Zoubou"
+              width={900}
+              height={300}
+              priority
+              draggable={false}
+              className={`w-full max-w-[360px] h-auto transition-transform duration-150 ${
+                logoPressing ? "scale-[0.97]" : "scale-100"
+              }`}
+            />
+          </div>
+          <div
+            className={`h-1 w-28 mx-auto mb-5 rounded-full bg-neutral-200 overflow-hidden transition-opacity duration-150 ${
+              logoPressing ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <div
+              className="h-full bg-brand-purple rounded-full"
+              style={{
+                width: logoPressing ? "100%" : "0%",
+                transitionProperty: "width",
+                transitionDuration: logoPressing ? `${ADMIN_HOLD_MS}ms` : "150ms",
+                transitionTimingFunction: "linear",
+              }}
+            />
+          </div>
           <button
             onClick={startBooking}
             disabled={!services}
@@ -425,6 +481,15 @@ export default function BookingWizard() {
               {confirmed.firstName} {confirmed.lastName}
             </div>
           </div>
+          {icsUrl && (
+            <a
+              href={icsUrl}
+              download="zoubou-rantevou.ics"
+              className="w-full block text-center border border-brand-purple text-brand-purple rounded-md py-3 font-medium mb-3"
+            >
+              Προσθήκη στο ημερολόγιο
+            </a>
+          )}
           <button
             onClick={startOver}
             className="w-full bg-brand-purple text-white rounded-md py-3 font-medium"

@@ -32,28 +32,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Μη έγκυρο αίτημα." }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  const ip = getClientIp(request);
-
-  const windowStart = new Date(
-    Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000
-  ).toISOString();
-
-  const { count } = await supabase
-    .from("booking_rate_limits")
-    .select("id", { count: "exact", head: true })
-    .eq("ip", ip)
-    .gte("created_at", windowStart);
-
-  if ((count ?? 0) >= RATE_LIMIT_MAX_ATTEMPTS) {
-    return NextResponse.json(
-      { error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." },
-      { status: 429 }
-    );
-  }
-
-  await supabase.from("booking_rate_limits").insert({ ip });
-
   const serviceId = body.serviceId;
   const date = body.date;
   const startTime = body.startTime;
@@ -88,6 +66,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "Το κινητό τηλέφωνο πρέπει να ξεκινά από 69 και να έχει 10 ψηφία." },
       { status: 400 }
+    );
+  }
+
+  const supabase = createAdminClient();
+  const ip = getClientIp(request);
+
+  // Only well-formed booking attempts consume the rate limit — a typo in
+  // the phone number shouldn't burn one of the user's few retries. The
+  // check-and-record happens atomically in the database (see migration
+  // 0003) to avoid a check-then-insert race under concurrent requests.
+  const { data: allowed, error: rateLimitError } = await supabase.rpc(
+    "record_booking_attempt",
+    {
+      p_ip: ip,
+      p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
+      p_max_attempts: RATE_LIMIT_MAX_ATTEMPTS,
+    }
+  );
+
+  if (rateLimitError) {
+    return NextResponse.json(
+      { error: "Σφάλμα κατά τη δημιουργία του ραντεβού." },
+      { status: 500 }
+    );
+  }
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." },
+      { status: 429 }
     );
   }
 

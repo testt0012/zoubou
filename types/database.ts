@@ -40,7 +40,7 @@ export interface Appointment {
   end_time: string;
   first_name: string;
   last_name: string;
-  mobile: string;
+  mobile: string | null;
   status: AppointmentStatus;
   created_at: string;
 }
