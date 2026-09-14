@@ -42,7 +42,19 @@ export interface Appointment {
   last_name: string;
   mobile: string | null;
   status: AppointmentStatus;
+  push_endpoint: string | null;
+  push_p256dh: string | null;
+  push_auth: string | null;
+  reminder_sent: boolean;
   created_at: string;
+}
+
+export interface PushSubscriptionJSON {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
 }
 
 export interface AppointmentWithService extends Appointment {

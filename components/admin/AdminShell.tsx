@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BottomNav from "@/components/admin/BottomNav";
+import PushNotificationPrompt from "@/components/admin/PushNotificationPrompt";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { ADMIN_NAV } from "@/components/admin/adminNav";
 
@@ -85,7 +86,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           {loading ? (
             <div className="py-16 text-center text-neutral-400 text-sm">Φόρτωση δεδομένων…</div>
           ) : (
-            children
+            <>
+              <PushNotificationPrompt />
+              {children}
+            </>
           )}
         </div>
       </main>

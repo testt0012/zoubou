@@ -6,6 +6,7 @@ import Image from "next/image";
 import Calendar from "@/components/Calendar";
 import { athensDateTimeToUTC, formatDateLong, todayAthens } from "@/lib/time";
 import { buildICS } from "@/lib/ics";
+import { isPushSupported, subscribeToPush } from "@/lib/push/client";
 
 const ADMIN_HOLD_MS = 3000;
 
@@ -71,6 +72,42 @@ export default function BookingWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<ConfirmedAppointment | null>(null);
+  const [reminderState, setReminderState] = useState<
+    "unsupported" | "idle" | "subscribing" | "subscribed"
+  >("unsupported");
+
+  // Push (unlike Notification) doesn't exist at all in a plain Safari tab
+  // on iOS, so this only ever offers the button when it can actually work —
+  // deferred a tick since it's a synchronous browser-capability check done
+  // from an effect (see lib/push/client.ts for the unsupported case).
+  useEffect(() => {
+    if (!confirmed) return;
+    Promise.resolve().then(() => {
+      if (isPushSupported() && Notification.permission !== "denied") {
+        setReminderState("idle");
+      }
+    });
+  }, [confirmed]);
+
+  async function handleEnableReminder() {
+    if (!confirmed) return;
+    setReminderState("subscribing");
+    const subscription = await subscribeToPush();
+    if (!subscription) {
+      setReminderState("unsupported");
+      return;
+    }
+    try {
+      await fetch("/api/push/customer-subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: confirmed.id, subscription }),
+      });
+    } catch {
+      // Best-effort — a failed subscribe doesn't affect the booking itself.
+    }
+    setReminderState("subscribed");
+  }
 
   // Object URL for the "add to calendar" .ics download — derived from
   // `confirmed`, not stored as state; a separate effect just revokes the
@@ -216,6 +253,7 @@ export default function BookingWizard() {
     setWebsite("");
     setConfirmed(null);
     setSubmitError(null);
+    setReminderState("unsupported");
   }
 
   return (
@@ -471,6 +509,20 @@ export default function BookingWizard() {
             >
               Προσθήκη στο ημερολόγιο
             </a>
+          )}
+          {(reminderState === "idle" || reminderState === "subscribing") && (
+            <button
+              onClick={handleEnableReminder}
+              disabled={reminderState === "subscribing"}
+              className="w-full border border-brand-purple text-brand-purple rounded-md py-3 font-medium mb-3 disabled:opacity-60"
+            >
+              {reminderState === "subscribing" ? "…" : "Ενεργοποίηση υπενθύμισης"}
+            </button>
+          )}
+          {reminderState === "subscribed" && (
+            <p className="text-sm text-neutral-500 mb-3">
+              Θα λάβετε υπενθύμιση μία μέρα πριν το ραντεβού σας.
+            </p>
           )}
           <button
             onClick={startOver}

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableSlots } from "@/lib/slots";
 import {
@@ -7,7 +7,8 @@ import {
   normalizeGreekMobile,
   sanitizeName,
 } from "@/lib/validation";
-import { minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
+import { formatDateLong, minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
+import { notifyAdmins } from "@/lib/push/server";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
@@ -151,6 +152,17 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  // Runs after the response is sent — the customer isn't kept waiting on
+  // however many admin devices are subscribed, and a slow/failed push
+  // never affects whether the booking itself succeeded.
+  after(() => {
+    notifyAdmins(supabase, {
+      title: "Νέο ραντεβού",
+      body: `${firstName} ${lastName} · ${formatDateLong(date)} στις ${startTime}`,
+      url: "/admin/dashboard",
+    }).catch(() => {});
+  });
 
   return NextResponse.json({ appointment }, { status: 201 });
 }
