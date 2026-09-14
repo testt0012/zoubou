@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Calendar from "@/components/Calendar";
-import { athensDateTimeToUTC, formatDateLong, todayAthens } from "@/lib/time";
-import { buildICS } from "@/lib/ics";
+import { formatDateLong, todayAthens } from "@/lib/time";
 import { isPushSupported, subscribeToPush } from "@/lib/push/client";
 
 const ADMIN_HOLD_MS = 3000;
@@ -108,27 +107,6 @@ export default function BookingWizard() {
     }
     setReminderState("subscribed");
   }
-
-  // Object URL for the "add to calendar" .ics download — derived from
-  // `confirmed`, not stored as state; a separate effect just revokes the
-  // previous one whenever a new one is created or the component unmounts.
-  const icsUrl = useMemo(() => {
-    if (!confirmed) return null;
-    const ics = buildICS({
-      uid: confirmed.id,
-      start: athensDateTimeToUTC(confirmed.date, confirmed.start_time),
-      end: athensDateTimeToUTC(confirmed.date, confirmed.end_time),
-      summary: `${confirmed.serviceName} – Zoubou`,
-      description: `Ραντεβού για ${confirmed.serviceName} στο κουρείο Zoubou.`,
-    });
-    return URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
-  }, [confirmed]);
-
-  useEffect(() => {
-    return () => {
-      if (icsUrl) URL.revokeObjectURL(icsUrl);
-    };
-  }, [icsUrl]);
 
   useEffect(() => {
     fetch("/api/services")
@@ -501,15 +479,12 @@ export default function BookingWizard() {
               {confirmed.firstName} {confirmed.lastName}
             </div>
           </div>
-          {icsUrl && (
-            <a
-              href={icsUrl}
-              download="zoubou-rantevou.ics"
-              className="w-full block text-center border border-brand-purple text-brand-purple rounded-md py-3 font-medium mb-3"
-            >
-              Προσθήκη στο ημερολόγιο
-            </a>
-          )}
+          <a
+            href={`/api/ics/${confirmed.id}`}
+            className="w-full block text-center border border-brand-purple text-brand-purple rounded-md py-3 font-medium mb-3"
+          >
+            Προσθήκη στο ημερολόγιο
+          </a>
           {(reminderState === "idle" || reminderState === "subscribing") && (
             <button
               onClick={handleEnableReminder}

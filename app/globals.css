@@ -31,14 +31,21 @@ body {
 }
 
 /* A fixed, viewport-pinned layer (rendered in app/layout.tsx, behind
-   everything via -z-10) instead of a background on html/body. Sizing a
+   everything via -z-10) instead of relying on html/body alone. Sizing a
    background to the document box left gaps whenever the page was shorter
    than the viewport, or during the moment content height changed (route
    transitions, mobile browsers collapsing their address bar) — a
    position:fixed element is always exactly the viewport size, so there's
    nothing left uncovered regardless of content height. This also sidesteps
    the old "background-attachment: fixed is unreliable on iOS Safari" issue
-   entirely, since it never uses that CSS property. */
+   entirely, since it never uses that CSS property.
+
+   The background is ALSO set on html itself: during iOS's elastic
+   "rubber-band" bounce past the top/bottom edge (e.g. a swipe), Safari
+   paints the momentarily-revealed area using the root element's own
+   background — a position:fixed child doesn't follow it out there — so
+   without this, that bounce flashes plain white. */
+html,
 .app-background {
   background: url("/background.jpg") top center / cover no-repeat;
 }
@@ -47,6 +54,7 @@ body {
    thin vertical strip — position it so the "BARBER" sign stays in frame
    instead of the plain wall. */
 @media (max-width: 640px) {
+  html,
   .app-background {
     background-position: 65% top;
   }
@@ -55,6 +63,17 @@ body {
 /* Plain, flat, minimal-motion by design — this app favors reliability over polish. */
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari auto-zooms the whole page on focus for any input/select/
+   textarea whose computed font-size is under 16px — several of ours use
+   Tailwind's text-sm (14px). !important because it has to beat those
+   utility classes regardless of specificity/order; this is a deliberate,
+   narrow override for a single well-known quirk, not a general escape hatch. */
+input,
+select,
+textarea {
+  font-size: 16px !important;
 }
 
 /* Directional slide-in for the incoming admin tab (bottom-nav tap or

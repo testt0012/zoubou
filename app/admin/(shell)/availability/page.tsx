@@ -2,10 +2,10 @@
 
 import SlideTransition from "@/components/admin/SlideTransition";
 import AvailabilityRuleRow from "@/components/admin/AvailabilityRuleRow";
+import AddAvailabilityRuleForm from "@/components/admin/AddAvailabilityRuleForm";
 import AddBlockedSlotForm from "@/components/admin/AddBlockedSlotForm";
-import TimeField from "@/components/admin/TimeField";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
-import { addAvailabilityRule, addAvailabilityRuleAllDays, deleteBlockedSlot } from "@/lib/actions/availability";
+import { deleteBlockedSlot } from "@/lib/actions/availability";
 import { weekdayLabel, formatDateLong } from "@/lib/time";
 import type { AvailabilityRule } from "@/types/database";
 
@@ -48,30 +48,7 @@ export default function AdminAvailabilityPage() {
                   <AvailabilityRuleRow key={rule.id} rule={rule} />
                 ))}
 
-                <form action={addAvailabilityRule} className="flex flex-wrap items-center gap-2 mt-1">
-                  <input type="hidden" name="weekday" value={weekday} />
-                  <TimeField
-                    name="start_time"
-                    required
-                    className="w-16 border border-neutral-300 rounded-md px-2 py-1 text-sm"
-                  />
-                  <span className="text-neutral-400">–</span>
-                  <TimeField
-                    name="end_time"
-                    required
-                    className="w-16 border border-neutral-300 rounded-md px-2 py-1 text-sm"
-                  />
-                  <button type="submit" className="text-sm text-brand-purple font-medium ml-auto">
-                    + Προσθήκη
-                  </button>
-                  <button
-                    type="submit"
-                    formAction={addAvailabilityRuleAllDays}
-                    className="text-xs text-neutral-500 underline"
-                  >
-                    Εφαρμογή σε όλες τις ημέρες
-                  </button>
-                </form>
+                <AddAvailabilityRuleForm weekday={weekday} allRules={availabilityRules} />
               </div>
             </details>
           );

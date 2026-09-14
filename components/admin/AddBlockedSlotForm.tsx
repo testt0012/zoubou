@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { addBlockedSlot } from "@/lib/actions/availability";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
-import TimeField from "@/components/admin/TimeField";
+import TimeSelect from "@/components/admin/TimeSelect";
 import { eachDate, timeToMinutes } from "@/lib/time";
 import type { AppointmentWithService } from "@/types/database";
 
@@ -104,7 +104,7 @@ export default function AddBlockedSlotForm() {
 
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm text-neutral-500">Ώρα</label>
-          <TimeField
+          <TimeSelect
             required
             value={startTime}
             onChange={(v) => {
@@ -114,7 +114,7 @@ export default function AddBlockedSlotForm() {
             className="w-16 border border-neutral-300 rounded-md px-2 py-1 text-sm"
           />
           <span className="text-neutral-400">–</span>
-          <TimeField
+          <TimeSelect
             required
             value={endTime}
             onChange={(v) => {

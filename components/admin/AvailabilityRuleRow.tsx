@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deleteAvailabilityRule, updateAvailabilityRule } from "@/lib/actions/availability";
-import TimeField from "@/components/admin/TimeField";
+import TimeSelect from "@/components/admin/TimeSelect";
 import type { AvailabilityRule } from "@/types/database";
 
 // Tap the time range to edit it in place instead of deleting the rule and
@@ -28,14 +28,14 @@ export default function AvailabilityRuleRow({ rule }: { rule: AvailabilityRule }
   if (editing) {
     return (
       <form onSubmit={handleSave} className="flex items-center gap-2 text-sm">
-        <TimeField
+        <TimeSelect
           required
           value={startTime}
           onChange={setStartTime}
           className="min-w-0 flex-1 border border-neutral-300 rounded-md px-2 py-1 text-sm"
         />
         <span className="text-neutral-400 shrink-0">–</span>
-        <TimeField
+        <TimeSelect
           required
           value={endTime}
           onChange={setEndTime}
