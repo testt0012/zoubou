@@ -25,8 +25,17 @@
   --font-sans: var(--font-geist-sans);
 }
 
+/* Set on both html and body — elastic overscroll (rubber-band bounce on
+   iOS, and similar overscroll-glow rendering elsewhere) can expose either
+   box beyond the page's own content, and without this it briefly shows
+   through as plain white. Matching backgrounds on both means there's
+   nothing to flash. */
+html,
 body {
   background: url("/background.jpg") top center / cover no-repeat fixed;
+}
+
+body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
@@ -35,6 +44,7 @@ body {
    thin vertical strip — position it so the "BARBER" sign stays in frame
    instead of the plain wall. */
 @media (max-width: 640px) {
+  html,
   body {
     background-position: 65% top;
   }
@@ -42,6 +52,7 @@ body {
 
 @supports (-webkit-touch-callout: none) {
   /* background-attachment: fixed is unreliable on iOS Safari */
+  html,
   body {
     background-attachment: scroll;
   }
@@ -50,4 +61,63 @@ body {
 /* Plain, flat, minimal-motion by design — this app favors reliability over polish. */
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Directional slide between admin tabs (bottom-nav tap or swipe) — see
+   components/admin/SlideTransition.tsx and adminNav.tsx. */
+::view-transition {
+  /* Keep the page interactive while a transition plays. */
+  pointer-events: none;
+}
+
+::view-transition-old(.nav-forward) {
+  --slide-offset: -32px;
+  animation:
+    150ms ease-in both view-fade reverse,
+    280ms ease-in-out both view-slide reverse;
+}
+::view-transition-new(.nav-forward) {
+  --slide-offset: 32px;
+  animation:
+    180ms ease-out 100ms both view-fade,
+    280ms ease-in-out both view-slide;
+}
+
+::view-transition-old(.nav-back) {
+  --slide-offset: 32px;
+  animation:
+    150ms ease-in both view-fade reverse,
+    280ms ease-in-out both view-slide reverse;
+}
+::view-transition-new(.nav-back) {
+  --slide-offset: -32px;
+  animation:
+    180ms ease-out 100ms both view-fade,
+    280ms ease-in-out both view-slide;
+}
+
+@keyframes view-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes view-slide {
+  from {
+    translate: var(--slide-offset);
+  }
+  to {
+    translate: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 }

@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/supabase/server";
-import AdminShell from "@/components/admin/AdminShell";
+import SlideTransition from "@/components/admin/SlideTransition";
 import {
   addAvailabilityRule,
   addBlockedSlot,
@@ -35,7 +35,7 @@ export default async function AdminAvailabilityPage() {
   const s = settings as Settings | null;
 
   return (
-    <AdminShell>
+    <SlideTransition>
       <h1 className="text-lg font-semibold mb-4">Εβδομαδιαίο ωράριο</h1>
       <div className="flex flex-col gap-4 mb-8">
         {WEEKDAYS.map((weekday) => (
@@ -190,6 +190,6 @@ export default async function AdminAvailabilityPage() {
           Αποθήκευση
         </button>
       </form>
-    </AdminShell>
+    </SlideTransition>
   );
 }

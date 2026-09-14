@@ -16,12 +16,16 @@ export default function ManualAppointmentForm({
   services: ServiceOption[];
   defaultDate: string;
 }) {
+  const [open, setOpen] = useState(false);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [date, setDate] = useState(defaultDate);
   const [slots, setSlots] = useState<string[] | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
 
+  // <details> doesn't unmount its content when collapsed, so without the
+  // `open` check this effect would fetch /api/slots on every dashboard
+  // page load even if the admin never opens this panel.
   useEffect(() => {
     let cancelled = false;
 
@@ -29,10 +33,10 @@ export default function ManualAppointmentForm({
       if (cancelled) return;
       setSelectedSlot("");
       setSlots(null);
-      setLoadingSlots(!!serviceId && !!date);
+      setLoadingSlots(open && !!serviceId && !!date);
     });
 
-    if (!serviceId || !date) {
+    if (!open || !serviceId || !date) {
       return () => {
         cancelled = true;
       };
@@ -53,12 +57,15 @@ export default function ManualAppointmentForm({
     return () => {
       cancelled = true;
     };
-  }, [serviceId, date]);
+  }, [open, serviceId, date]);
 
   const hasSlots = !!slots && slots.length > 0;
 
   return (
-    <details className="group mb-4 border border-neutral-200 rounded-lg overflow-hidden">
+    <details
+      className="group mb-4 border border-neutral-200 rounded-lg overflow-hidden"
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
       <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-brand-purple flex items-center justify-between">
         + Προσθήκη ραντεβού
         <span className="text-neutral-400 transition-transform group-open:rotate-45">+</span>

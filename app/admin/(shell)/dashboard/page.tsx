@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/supabase/server";
-import AdminShell from "@/components/admin/AdminShell";
+import SlideTransition from "@/components/admin/SlideTransition";
 import AppointmentRow from "@/components/admin/AppointmentRow";
 import ManualAppointmentForm from "@/components/admin/ManualAppointmentForm";
 import { addDays, athensNow, formatDateLong, timeToMinutes, todayAthens, weekdayLabel, weekdayOf } from "@/lib/time";
@@ -57,7 +57,7 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
   );
 
   return (
-    <AdminShell>
+    <SlideTransition>
       <h1 className="text-lg font-semibold mb-4">Ραντεβού</h1>
 
       {nextAppointment ? (
@@ -124,6 +124,6 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           ))}
         </div>
       )}
-    </AdminShell>
+    </SlideTransition>
   );
 }

@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/supabase/server";
-import AdminShell from "@/components/admin/AdminShell";
+import SlideTransition from "@/components/admin/SlideTransition";
 import { createService, toggleServiceActive, updateService } from "@/lib/actions/services";
 import type { Service } from "@/types/database";
 
@@ -13,43 +13,47 @@ export default async function AdminServicesPage() {
   const services = (data ?? []) as Service[];
 
   return (
-    <AdminShell>
+    <SlideTransition>
       <h1 className="text-lg font-semibold mb-4">Υπηρεσίες</h1>
 
       <div className="flex flex-col gap-3 mb-8">
         {services.map((s) => (
-          <form
+          <div
             key={s.id}
-            action={updateService}
             className="border border-neutral-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
           >
-            <input type="hidden" name="id" value={s.id} />
-            <input
-              name="name"
-              defaultValue={s.name}
-              required
-              className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
-            />
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                name="duration_minutes"
-                defaultValue={s.duration_minutes}
-                min={1}
-                max={480}
-                required
-                className="w-24 border border-neutral-300 rounded-md px-3 py-2"
-              />
-              <span className="text-sm text-neutral-500">λεπτά</span>
-            </div>
-            <button
-              type="submit"
-              className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+            <form
+              action={updateService}
+              className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3"
             >
-              Αποθήκευση
-            </button>
+              <input type="hidden" name="id" value={s.id} />
+              <input
+                name="name"
+                defaultValue={s.name}
+                required
+                className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  name="duration_minutes"
+                  defaultValue={s.duration_minutes}
+                  min={1}
+                  max={480}
+                  required
+                  className="w-24 border border-neutral-300 rounded-md px-3 py-2"
+                />
+                <span className="text-sm text-neutral-500">λεπτά</span>
+              </div>
+              <button
+                type="submit"
+                className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+              >
+                Αποθήκευση
+              </button>
+            </form>
             <ToggleActiveButton id={s.id} active={s.active} />
-          </form>
+          </div>
         ))}
         {services.length === 0 && (
           <p className="text-neutral-500 text-sm">Δεν υπάρχουν υπηρεσίες ακόμα.</p>
@@ -80,7 +84,7 @@ export default async function AdminServicesPage() {
           Προσθήκη
         </button>
       </form>
-    </AdminShell>
+    </SlideTransition>
   );
 }
 

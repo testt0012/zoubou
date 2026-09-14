@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/supabase/server";
-import AdminShell from "@/components/admin/AdminShell";
+import SlideTransition from "@/components/admin/SlideTransition";
 import AppointmentRow from "@/components/admin/AppointmentRow";
 import { addDays, eachDate, formatDateLong, formatDateShort, startOfWeek, todayAthens } from "@/lib/time";
 import { bookedMinutesForDate, occupancyPercent, workingMinutesForDate } from "@/lib/occupancy";
@@ -95,7 +95,7 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
   }
 
   return (
-    <AdminShell>
+    <SlideTransition>
       <h1 className="text-lg font-semibold mb-6">Αναφορές</h1>
 
       <div className="flex flex-col gap-8">
@@ -250,7 +250,7 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
           )}
         </section>
       </div>
-    </AdminShell>
+    </SlideTransition>
   );
 }
 
