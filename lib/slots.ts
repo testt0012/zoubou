@@ -1,14 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { athensNow, minutesToTime, timeToMinutes, weekdayOf } from "@/lib/time";
-
-interface Interval {
-  start: number;
-  end: number;
-}
-
-function overlaps(a: Interval, b: Interval): boolean {
-  return a.start < b.end && b.start < a.end;
-}
+import { subtractIntervals, type Interval } from "@/lib/occupancy";
+import {
+  fixedIntervalsFor,
+  leavesRoomFor,
+  placeReservations,
+  toRecurringVisit,
+  zoneReservationsFor,
+} from "@/lib/recurring";
 
 export type SlotError = "service_not_found" | "invalid_date";
 
@@ -21,7 +20,16 @@ export interface SlotsResult {
  * Computes bookable start times ("HH:MM") for a given service on a given
  * Athens calendar date: weekly availability windows, minus blocked slots,
  * minus existing confirmed appointments (padded by the configured buffer),
- * stepped at the admin-configured slot granularity, and never in the past.
+ * minus what's held for regular customers (see lib/recurring.ts: a fixed
+ * time is simply taken; a time zone keeps one opening free, so the last
+ * free slot in it isn't offered), and never in the past.
+ *
+ * Slots are stepped by the service's own duration, back to back, starting
+ * from the beginning of each free stretch — a 40' service in a window
+ * opening at 10:00 offers 10:00, 10:40, 11:20… and, after a booking that
+ * ends at 12:15, carries on from 12:15, 12:55… — so changing a service's
+ * duration in the admin reshapes its slots and no dead gaps are left
+ * between appointments.
  *
  * Used both by GET /api/slots (to show clients options) and by POST /api/book
  * (to re-validate the chosen slot server-side before insert) — the exclusion
@@ -47,7 +55,7 @@ export async function computeAvailableSlots(
 
   const duration = service.duration_minutes as number;
 
-  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }] =
+  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }, { data: regulars }] =
     await Promise.all([
       supabase.from("settings").select("*").eq("id", true).maybeSingle(),
       supabase
@@ -60,9 +68,14 @@ export async function computeAvailableSlots(
         .select("start_time, end_time")
         .eq("date", date)
         .eq("status", "confirmed"),
+      // Errors (e.g. the table not existing before migration 0009) just
+      // mean "no regulars".
+      supabase
+        .from("recurring_customers")
+        .select("*, services(duration_minutes)")
+        .lte("start_date", date),
     ]);
 
-  const granularity = settings?.slot_granularity_minutes ?? 30;
   const buffer = settings?.buffer_minutes ?? 0;
 
   const windows: Interval[] = (rules ?? []).map((r) => ({
@@ -70,7 +83,14 @@ export async function computeAvailableSlots(
     end: timeToMinutes(r.end_time),
   }));
 
+  const visits = (regulars ?? []).map((r) => {
+    const joined = r.services as { duration_minutes: number } | { duration_minutes: number }[] | null;
+    const regularService = Array.isArray(joined) ? joined[0] : joined;
+    return toRecurringVisit(r, regularService?.duration_minutes ?? 0);
+  });
+
   const busy: Interval[] = [
+    ...fixedIntervalsFor(visits, date),
     ...(blocked ?? []).map((b) => ({
       start: timeToMinutes(b.start_time),
       end: timeToMinutes(b.end_time),
@@ -84,19 +104,21 @@ export async function computeAvailableSlots(
   const now = athensNow();
   const isToday = now.date === date;
 
+  const freeSegments = subtractIntervals(windows, busy);
+
+  // A zone regular can only still be seated in what's left of today. Only
+  // the zones that can be seated at all are enforced — one that's already
+  // out of room must not take every other slot of the day down with it.
+  const reservable = isToday ? subtractIntervals(freeSegments, [{ start: 0, end: now.minutes }]) : freeSegments;
+  const zones = placeReservations(reservable, zoneReservationsFor(visits, date));
+
   const results: number[] = [];
 
-  for (const window of windows) {
-    for (
-      let start = window.start;
-      start + duration <= window.end;
-      start += granularity
-    ) {
+  for (const free of freeSegments) {
+    for (let start = free.start; start + duration <= free.end; start += duration) {
       if (isToday && start <= now.minutes) continue;
-
-      const candidate: Interval = { start, end: start + duration };
-      const blockedByBusy = busy.some((b) => overlaps(candidate, b));
-      if (!blockedByBusy) results.push(start);
+      if (!leavesRoomFor(reservable, { start, end: start + duration }, zones)) continue;
+      results.push(start);
     }
   }
 

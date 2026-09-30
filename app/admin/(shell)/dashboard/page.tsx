@@ -4,8 +4,11 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import SlideTransition from "@/components/admin/SlideTransition";
-import AppointmentRow from "@/components/admin/AppointmentRow";
+import DayAppointmentGrid from "@/components/admin/DayAppointmentGrid";
 import ManualAppointmentForm from "@/components/admin/ManualAppointmentForm";
+import RecurringCustomerForm from "@/components/admin/RecurringCustomerForm";
+import { RecurringCustomerList } from "@/components/admin/RecurringCustomers";
+import { useRecurringVisits } from "@/components/admin/useRecurringVisits";
 import WeekStrip from "@/components/admin/WeekStrip";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import {
@@ -18,12 +21,14 @@ import {
   weekdayLabel,
   weekdayOf,
 } from "@/lib/time";
-import { bookedMinutesForDate, occupancyPercent, workingMinutesForDate } from "@/lib/occupancy";
+import { occupancyPercent, workingMinutesForDate } from "@/lib/occupancy";
 import { isValidDateString } from "@/lib/validation";
 
 export default function AdminDashboardPage() {
   const searchParams = useSearchParams();
-  const { services, availabilityRules, blockedSlots, appointments, ensureAppointmentsRange } = useAdminData();
+  const { services, availabilityRules, blockedSlots, appointments, recurringCustomers, ensureAppointmentsRange } =
+    useAdminData();
+  const { takenMinutesFor, serviceNames } = useRecurringVisits();
   const today = todayAthens();
 
   const rawWeekStart = searchParams.get("weekStart");
@@ -44,9 +49,8 @@ export default function AdminDashboardPage() {
     appointments.find((a) => a.date === today && timeToMinutes(a.start_time) >= now.minutes) ?? null;
   const todayWorkingMinutes = workingMinutesForDate(availabilityRules, blockedSlots, today);
 
-  const selectedDayAppointments = appointments.filter((a) => a.date === selectedDate);
   const selectedDayPercent = occupancyPercent(
-    bookedMinutesForDate(appointments, selectedDate),
+    takenMinutesFor(selectedDate),
     workingMinutesForDate(availabilityRules, blockedSlots, selectedDate)
   );
 
@@ -56,10 +60,13 @@ export default function AdminDashboardPage() {
 
   return (
     <SlideTransition>
-      <div className="flex items-center gap-3 mb-4">
-        <h1 className="text-lg font-semibold">Ραντεβού</h1>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <h1 className="text-lg font-semibold mr-1">Ραντεβού</h1>
         {activeServices.length > 0 && (
-          <ManualAppointmentForm services={activeServices} defaultDate={selectedDate} minDate={today} />
+          <>
+            <ManualAppointmentForm services={activeServices} defaultDate={selectedDate} minDate={today} />
+            <RecurringCustomerForm services={activeServices} defaultDate={selectedDate} minDate={today} />
+          </>
         )}
       </div>
 
@@ -112,7 +119,7 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-7 gap-1 mb-4">
           {days.map((d) => {
             const working = workingMinutesForDate(availabilityRules, blockedSlots, d);
-            const booked = bookedMinutesForDate(appointments, d);
+            const booked = takenMinutesFor(d);
             const percent = occupancyPercent(booked, working);
             const isSelected = d === selectedDate;
             const isToday = d === today;
@@ -143,15 +150,9 @@ export default function AdminDashboardPage() {
         <span className="text-sm font-semibold text-brand-purple">{selectedDayPercent}% πληρότητα</span>
       </div>
 
-      {selectedDayAppointments.length === 0 ? (
-        <p className="text-neutral-500 text-sm">Δεν υπάρχουν ραντεβού αυτή την ημέρα.</p>
-      ) : (
-        <div className="grid grid-cols-3 gap-1.5">
-          {selectedDayAppointments.map((a, i) => (
-            <AppointmentRow key={a.id} appointment={a} index={i} />
-          ))}
-        </div>
-      )}
+      <DayAppointmentGrid date={selectedDate} />
+
+      <RecurringCustomerList customers={recurringCustomers} serviceNames={serviceNames} />
     </SlideTransition>
   );
 }

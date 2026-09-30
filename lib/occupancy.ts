@@ -1,13 +1,13 @@
 import { timeToMinutes, weekdayOf } from "@/lib/time";
 
-interface Interval {
+export interface Interval {
   start: number;
   end: number;
 }
 
 // Subtracts each interval in `cuts` from the intervals in `base`, splitting
 // a base interval in two when a cut falls in the middle of it.
-function subtractIntervals(base: Interval[], cuts: Interval[]): Interval[] {
+export function subtractIntervals(base: Interval[], cuts: Interval[]): Interval[] {
   let result = base;
   for (const cut of cuts) {
     const next: Interval[] = [];

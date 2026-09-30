@@ -2,60 +2,63 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { eachDate } from "@/lib/time";
-import { isValidDateString } from "@/lib/validation";
+import { isValidDateString, isValidTimeString } from "@/lib/validation";
+import { isValidRange, mergeRanges, MAX_RANGES_PER_DAY, type TimeRange } from "@/lib/hours";
 
 const MAX_BLOCKED_RANGE_DAYS = 366;
 
-export async function addAvailabilityRule(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const weekday = Number(formData.get("weekday"));
-  const start_time = String(formData.get("start_time") ?? "");
-  const end_time = String(formData.get("end_time") ?? "");
+export interface SetWeekdayHoursResult {
+  success: boolean;
+  error?: string;
+}
 
-  if (
-    !Number.isInteger(weekday) ||
-    weekday < 0 ||
-    weekday > 6 ||
-    !start_time ||
-    !end_time ||
-    start_time >= end_time
-  ) {
-    return;
+// The only way weekly hours are written: replaces everything stored for the
+// given weekdays with `ranges` (an empty list = closed that day). Replacing
+// the day wholesale, with the ranges merged first, is what guarantees a day
+// can never end up with two overlapping rules (e.g. 09:00–17:00 alongside
+// 09:00–23:00) the way adding rules one by one used to allow.
+export async function setWeekdayHours(
+  weekdays: number[],
+  ranges: TimeRange[]
+): Promise<SetWeekdayHoursResult> {
+  const { supabase } = await requireAdmin();
+
+  const days = Array.from(new Set(weekdays));
+  const validDays =
+    days.length > 0 && days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+  const validRanges =
+    Array.isArray(ranges) &&
+    ranges.length <= MAX_RANGES_PER_DAY &&
+    ranges.every((r) => isValidTimeString(r?.start) && isValidTimeString(r?.end) && isValidRange(r));
+
+  if (!validDays || !validRanges) {
+    return { success: false, error: "Μη έγκυρο ωράριο." };
   }
 
-  await supabase.from("availability_rules").insert({ weekday, start_time, end_time });
-}
+  const merged = mergeRanges(ranges);
 
-// Same time range, every day of the week at once — for the common "open
-// the same hours every day" case instead of filling in the form 7 times.
-export async function addAvailabilityRuleAllDays(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const start_time = String(formData.get("start_time") ?? "");
-  const end_time = String(formData.get("end_time") ?? "");
+  const { data: previous, error: readError } = await supabase
+    .from("availability_rules")
+    .select("weekday, start_time, end_time")
+    .in("weekday", days);
+  if (readError) return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
 
-  if (!start_time || !end_time || start_time >= end_time) return;
+  const { error: deleteError } = await supabase.from("availability_rules").delete().in("weekday", days);
+  if (deleteError) return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
 
-  const rows = Array.from({ length: 7 }, (_, weekday) => ({ weekday, start_time, end_time }));
-  await supabase.from("availability_rules").insert(rows);
-}
+  if (merged.length === 0) return { success: true };
 
-export async function updateAvailabilityRule(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const id = String(formData.get("id") ?? "");
-  const start_time = String(formData.get("start_time") ?? "");
-  const end_time = String(formData.get("end_time") ?? "");
+  const rows = days.flatMap((weekday) =>
+    merged.map((r) => ({ weekday, start_time: r.start, end_time: r.end }))
+  );
+  const { error: insertError } = await supabase.from("availability_rules").insert(rows);
+  if (insertError) {
+    // Put the old hours back rather than leave those days closed.
+    if (previous && previous.length > 0) await supabase.from("availability_rules").insert(previous);
+    return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
+  }
 
-  if (!id || !start_time || !end_time || start_time >= end_time) return;
-
-  await supabase.from("availability_rules").update({ start_time, end_time }).eq("id", id);
-}
-
-export async function deleteAvailabilityRule(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-
-  await supabase.from("availability_rules").delete().eq("id", id);
+  return { success: true };
 }
 
 // Accepts a date range ("Από" / "Έως") rather than a single day, so a

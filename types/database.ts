@@ -26,6 +26,22 @@ export interface BlockedSlot {
   created_at: string;
 }
 
+export interface RecurringCustomer {
+  id: string;
+  first_name: string;
+  last_name: string;
+  mobile: string | null;
+  service_id: string;
+  start_date: string; // first visit, "YYYY-MM-DD" — its weekday is the visit day
+  interval_weeks: number; // 1, 2 or 3
+  start_time: string; // "HH:MM:SS"
+  zone_end_time: string | null; // null = fixed time, otherwise end of the time zone
+  // Dates the customer is skipping (absent on a database that hasn't had
+  // migration 0010 yet).
+  skipped_dates?: string[];
+  created_at: string;
+}
+
 export interface Settings {
   id: true;
   slot_granularity_minutes: number;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createManualAppointment } from "@/lib/actions/appointments";
+import DatePicker from "@/components/admin/DatePicker";
 
 interface ServiceOption {
   id: string;
@@ -139,18 +140,14 @@ export default function ManualAppointmentForm({
 
               <div className="flex gap-3">
                 <div className="flex-1 min-w-0">
-                  <label htmlFor="date" className="block text-sm font-medium mb-1">
-                    Ημερομηνία
-                  </label>
-                  <input
-                    id="date"
-                    type="date"
-                    name="date"
-                    required
-                    min={minDate}
+                  <div className="text-sm font-medium mb-1">Ημερομηνία</div>
+                  <input type="hidden" name="date" value={date} />
+                  <DatePicker
+                    title="Ημερομηνία"
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full min-w-0 border border-neutral-300 rounded-md px-2 py-2 text-sm"
+                    minDate={minDate}
+                    onChange={setDate}
+                    className="w-full min-w-0 h-[42px] border border-neutral-300 rounded-md px-2 bg-white"
                   />
                 </div>
                 <div className="flex-1 min-w-0">

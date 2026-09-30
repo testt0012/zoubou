@@ -105,9 +105,60 @@ textarea {
   }
 }
 
+/* The month grid in components/Calendar.tsx slides in from the side the
+   month was changed towards (arrow tap or swipe). */
+.calendar-slide-next {
+  animation: admin-slide-in 260ms var(--transition-ease) both;
+  --admin-slide-offset: 40px;
+}
+.calendar-slide-prev {
+  animation: admin-slide-in 260ms var(--transition-ease) both;
+  --admin-slide-offset: -40px;
+}
+
+/* Bottom sheet (components/admin/BottomSheet.tsx): the panel rises from
+   the bottom edge while the backdrop fades in. */
+.sheet-up {
+  animation: sheet-up 280ms var(--transition-ease) both;
+}
+.sheet-fade {
+  animation: sheet-fade 200ms ease-out both;
+}
+
+@keyframes sheet-up {
+  from {
+    translate: 0 100%;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The picker wheels scroll, but a scrollbar down the side of each column
+   would ruin the look. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-slide-forward,
-  .admin-slide-back {
+  .admin-slide-back,
+  .calendar-slide-next,
+  .calendar-slide-prev,
+  .sheet-up,
+  .sheet-fade {
     animation-duration: 0s;
   }
 }

@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { addDays, todayAthens } from "@/lib/time";
-import type { AppointmentWithService, AvailabilityRule, BlockedSlot, Service } from "@/types/database";
+import type {
+  AppointmentWithService,
+  AvailabilityRule,
+  BlockedSlot,
+  RecurringCustomer,
+  Service,
+} from "@/types/database";
 
 // How far forward appointments are cached on login. Reports/dashboard week
 // navigation past this window calls ensureAppointmentsRange to extend it
@@ -18,7 +24,32 @@ interface AdminDataValue {
   availabilityRules: AvailabilityRule[];
   blockedSlots: BlockedSlot[];
   appointments: AppointmentWithService[];
+  recurringCustomers: RecurringCustomer[];
   ensureAppointmentsRange: (from: string, to: string) => Promise<void>;
+  refreshAvailabilityRules: () => Promise<void>;
+  refreshRecurringCustomers: () => Promise<void>;
+}
+
+const RETRY_DELAYS_MS = [600, 1500];
+// "That table doesn't exist" — retrying won't change it.
+const MISSING_TABLE_CODES = ["42P01", "PGRST205"];
+
+// Runs a read, retrying a failed one a couple of times, and returns null
+// (rather than empty data) if it still fails so the caller keeps what it
+// already had. The case this exists for: right after sign-in, the first
+// request can be rejected with 401 "JWT issued at future" (PGRST303) when
+// the fresh token's timestamp is a moment ahead of the API server's clock.
+// Without the retry that table simply came up empty until something in it
+// changed.
+async function readWithRetry<T>(
+  run: () => PromiseLike<{ data: T | null; error: { code?: string } | null }>
+): Promise<T | null> {
+  for (let attempt = 0; ; attempt++) {
+    const { data, error } = await run();
+    if (!error) return data;
+    if (attempt >= RETRY_DELAYS_MS.length || MISSING_TABLE_CODES.includes(error.code ?? "")) return null;
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+  }
 }
 
 const AdminDataContext = createContext<AdminDataValue | null>(null);
@@ -49,40 +80,57 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
   const [availabilityRules, setAvailabilityRules] = useState<AvailabilityRule[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
   const [appointments, setAppointments] = useState<AppointmentWithService[]>([]);
+  const [recurringCustomers, setRecurringCustomers] = useState<RecurringCustomer[]>([]);
 
   const rangeRef = useRef({ from: today, to: addDays(today, INITIAL_APPOINTMENT_WINDOW_DAYS) });
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const recurringChannelRef = useRef<RealtimeChannel | null>(null);
 
   const refetchServices = useCallback(async () => {
-    const { data } = await supabase.from("services").select("*").order("sort_order", { ascending: true });
-    setServices((data ?? []) as Service[]);
+    const data = await readWithRetry(() =>
+      supabase.from("services").select("*").order("sort_order", { ascending: true })
+    );
+    if (data) setServices(data as Service[]);
   }, [supabase]);
 
   const refetchAvailabilityRules = useCallback(async () => {
-    const { data } = await supabase
-      .from("availability_rules")
-      .select("*")
-      .order("weekday", { ascending: true })
-      .order("start_time", { ascending: true });
-    setAvailabilityRules((data ?? []) as AvailabilityRule[]);
+    const data = await readWithRetry(() =>
+      supabase
+        .from("availability_rules")
+        .select("*")
+        .order("weekday", { ascending: true })
+        .order("start_time", { ascending: true })
+    );
+    if (data) setAvailabilityRules(data as AvailabilityRule[]);
   }, [supabase]);
 
   const refetchBlockedSlots = useCallback(async () => {
-    const { data } = await supabase.from("blocked_slots").select("*").order("date", { ascending: true });
-    setBlockedSlots((data ?? []) as BlockedSlot[]);
+    const data = await readWithRetry(() =>
+      supabase.from("blocked_slots").select("*").order("date", { ascending: true })
+    );
+    if (data) setBlockedSlots(data as BlockedSlot[]);
+  }, [supabase]);
+
+  const refetchRecurringCustomers = useCallback(async () => {
+    const data = await readWithRetry(() =>
+      supabase.from("recurring_customers").select("*").order("start_time", { ascending: true })
+    );
+    if (data) setRecurringCustomers(data as RecurringCustomer[]);
   }, [supabase]);
 
   const fetchAppointments = useCallback(
     async (from: string, to: string) => {
-      const { data } = await supabase
-        .from("appointments")
-        .select("*, services(id, name, duration_minutes)")
-        .eq("status", "confirmed")
-        .gte("date", from)
-        .lte("date", to)
-        .order("date", { ascending: true })
-        .order("start_time", { ascending: true });
-      setAppointments((data ?? []) as AppointmentWithService[]);
+      const data = await readWithRetry(() =>
+        supabase
+          .from("appointments")
+          .select("*, services(id, name, duration_minutes)")
+          .eq("status", "confirmed")
+          .gte("date", from)
+          .lte("date", to)
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true })
+      );
+      if (data) setAppointments(data as AppointmentWithService[]);
     },
     [supabase]
   );
@@ -126,6 +174,7 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
         refetchServices(),
         refetchAvailabilityRules(),
         refetchBlockedSlots(),
+        refetchRecurringCustomers(),
         fetchAppointments(rangeRef.current.from, rangeRef.current.to),
       ]);
       if (cancelled) return;
@@ -168,6 +217,15 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
       });
       if (cancelled) return;
 
+      // On its own channel: if this table isn't there (or isn't published)
+      // yet, only this subscription fails, not the live updates above.
+      recurringChannelRef.current = supabase
+        .channel("admin-recurring")
+        .on("postgres_changes", { event: "*", schema: "public", table: "recurring_customers" }, () => {
+          refetchRecurringCustomers();
+        })
+        .subscribe();
+
       setLoading(false);
     })();
 
@@ -177,8 +235,20 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+      if (recurringChannelRef.current) {
+        supabase.removeChannel(recurringChannelRef.current);
+        recurringChannelRef.current = null;
+      }
     };
-  }, [supabase, router, refetchServices, refetchAvailabilityRules, refetchBlockedSlots, fetchAppointments]);
+  }, [
+    supabase,
+    router,
+    refetchServices,
+    refetchAvailabilityRules,
+    refetchBlockedSlots,
+    refetchRecurringCustomers,
+    fetchAppointments,
+  ]);
 
   const value: AdminDataValue = {
     loading,
@@ -186,7 +256,10 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
     availabilityRules,
     blockedSlots,
     appointments,
+    recurringCustomers,
     ensureAppointmentsRange,
+    refreshAvailabilityRules: refetchAvailabilityRules,
+    refreshRecurringCustomers: refetchRecurringCustomers,
   };
 
   return <AdminDataContext.Provider value={value}>{children}</AdminDataContext.Provider>;
