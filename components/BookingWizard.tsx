@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import ThemedLogo from "@/components/ThemedLogo";
 import WeekPicker from "@/components/WeekPicker";
 import { formatDateLong, todayAthens } from "@/lib/time";
 import { lastBookableDate, MAX_ADVANCE_DAYS } from "@/lib/booking";
@@ -355,14 +355,7 @@ export default function BookingWizard({ initialServices = null }: { initialServi
     <div className="w-full max-w-md mx-auto px-4 py-6 my-6 bg-white rounded-2xl shadow-lg shadow-black/20">
       {step !== "intro" && (
         <div className="flex justify-center mb-4">
-          <Image
-            src="/logo-dark-720.webp" unoptimized
-            alt="Zoubou"
-            width={900}
-            height={300}
-            priority
-            className="w-full max-w-[360px] h-auto"
-          />
+          <ThemedLogo className="w-full max-w-[360px] h-auto" />
         </div>
       )}
       {step === "intro" && (
@@ -379,17 +372,9 @@ export default function BookingWizard({ initialServices = null }: { initialServi
             onPointerCancel={cancelLogoHold}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <Image
-              src="/logo-dark-720.webp" unoptimized
-              alt="Zoubou"
-              width={900}
-              height={300}
-              priority
-              draggable={false}
-              className={`w-full max-w-[360px] h-auto transition-transform duration-150 ${
+            <ThemedLogo draggable={false} className={`w-full max-w-[360px] h-auto transition-transform duration-150 ${
                 logoPressing ? "scale-[0.97]" : "scale-100"
-              }`}
-            />
+              }`} />
           </div>
           <div
             className={`h-1 w-28 mx-auto mb-5 rounded-full bg-neutral-200 overflow-hidden transition-opacity duration-150 ${

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import ThemedLogo from "@/components/ThemedLogo";
 import Link from "next/link";
 import WeekPicker from "@/components/WeekPicker";
 import { CHANGE_DEADLINE_HOURS, lastBookableDate, MAX_ADVANCE_DAYS } from "@/lib/booking";
@@ -212,7 +212,7 @@ export default function ManageAppointment({ id }: { id: string }) {
   return (
     <div className="w-full max-w-md mx-auto px-4 py-6 my-6 bg-white rounded-2xl shadow-lg shadow-black/20">
       <div className="flex justify-center mb-4">
-        <Image src="/logo-dark-720.webp" unoptimized alt="Zoubou" width={900} height={300} priority className="w-full max-w-[360px] h-auto" />
+        <ThemedLogo className="w-full max-w-[360px] h-auto" />
       </div>
 
       {loadState === "loading" && <p className="text-center text-neutral-500 text-sm py-8">Φόρτωση…</p>}

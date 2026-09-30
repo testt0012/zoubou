@@ -50,27 +50,13 @@ html,
   background: url("/background.webp") top center / cover no-repeat;
 }
 
-/* The layer reaches past the viewport on every side: iOS draws its status
-   bar and toolbar areas over (and samples their colour from) whatever sits at
-   the very edge, and a layer that stops exactly at the viewport left a white
-   strip under the status bar. The image itself stays sized to the screen. */
-.app-background {
-  top: -120px;
-  bottom: -120px;
-  background-position: center 120px;
-}
-
-html {
-  background-color: #2a2a2e;
-}
-
 /* On phone-width screens, "cover" crops most of the photo's width down to a
    thin vertical strip — position it so the "BARBER" sign stays in frame
    instead of the plain wall. */
 @media (max-width: 640px) {
   html,
   .app-background {
-    background-position: 65% 120px;
+    background-position: 65% top;
   }
 }
 
@@ -248,31 +234,39 @@ textarea {
    flipping them here turns every text-neutral-* / border-neutral-* /
    bg-neutral-* inside the scope; white backgrounds are flipped explicitly
    (text-white, used on the purple buttons, stays white). */
-.customer-dark {
-  color-scheme: dark;
-  color: #f4f4f5;
-  --color-neutral-50: #17171c;
-  --color-neutral-100: #1f1f26;
-  --color-neutral-200: #30303a;
-  --color-neutral-300: #454550;
-  --color-neutral-400: #7d7d8a;
-  --color-neutral-500: #a3a3b0;
-  --color-neutral-700: #d4d4dc;
-  --color-neutral-800: #e8e8ee;
-  --color-neutral-900: #f4f4f5;
-  --color-red-600: #f87171;
-  --color-red-200: #7f1d1d;
+.logo-dark { display: none; }
+.splash-themed { background: #fff; }
+
+@media (prefers-color-scheme: dark) {
+  .customer-dark {
+    color-scheme: dark;
+    color: #f4f4f5;
+    --color-neutral-50: #17171c;
+    --color-neutral-100: #1f1f26;
+    --color-neutral-200: #30303a;
+    --color-neutral-300: #454550;
+    --color-neutral-400: #7d7d8a;
+    --color-neutral-500: #a3a3b0;
+    --color-neutral-700: #d4d4dc;
+    --color-neutral-800: #e8e8ee;
+    --color-neutral-900: #f4f4f5;
+    --color-red-600: #f87171;
+    --color-red-200: #7f1d1d;
+  }
+  .customer-dark .bg-white {
+    background-color: #000;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 10px 30px rgb(0 0 0 / 0.5);
+  }
+  .customer-dark .border-red-200 {
+    border-color: #7f1d1d;
+  }
+  .customer-dark .bg-red-50 {
+    background-color: #2a1215;
+  }
+
+  .logo-light { display: none; }
+  .logo-dark { display: block; }
+  .splash-themed { background: #000; }
+  .splash-scissors [stroke="#262626"] { stroke: #e5e5e5; }
 }
-.customer-dark-backdrop {
-  background: #121216;
-}
-.customer-dark .bg-white {
-  background-color: #000;
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 10px 30px rgb(0 0 0 / 0.5);
-}
-.customer-dark .border-red-200 {
-  border-color: #7f1d1d;
-}
-.customer-dark .bg-red-50 {
-  background-color: #2a1215;
-}
+
