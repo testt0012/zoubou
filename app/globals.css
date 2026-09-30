@@ -50,6 +50,16 @@ html,
   background: url("/background.webp") top center / cover no-repeat;
 }
 
+/* iOS Safari colours the strip under the status bar (and the toolbar) from
+   the page's background *colour* at that edge — a background image doesn't
+   count, so with only the photo it fell back to white. A dark wall-brown
+   colour on html (not body: its background would paint over the photo
+   layer), matching the top of the photo, is what it picks up
+   instead. */
+html {
+  background-color: #3b3734;
+}
+
 /* The layer reaches 120px above the viewport, and the photo — sized like
    "cover" on the viewport (1600x916 image) — is shifted down by the same
    amount so it sits exactly where it did:
