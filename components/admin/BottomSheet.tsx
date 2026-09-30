@@ -11,10 +11,6 @@ interface Props {
   children: React.ReactNode;
 }
 
-function stopPropagation(e: React.SyntheticEvent) {
-  e.stopPropagation();
-}
-
 // A panel that slides up from the bottom edge over a dimmed page, the way
 // the phone's own pickers do. Rendered into <body> so no animated/clipped
 // ancestor can trap it.
@@ -33,14 +29,7 @@ export default function BottomSheet({ title, onClose, onDone, children }: Props)
   }, [onClose]);
 
   return createPortal(
-    // React events bubble through a portal to its React ancestors — stopped
-    // here so dragging inside the sheet can't trigger the admin shell's
-    // swipe-between-tabs handler.
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      onTouchStart={stopPropagation}
-      onTouchEnd={stopPropagation}
-    >
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div className="absolute inset-0 bg-black/40 sheet-fade" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"

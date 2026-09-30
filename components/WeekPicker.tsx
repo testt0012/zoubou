@@ -104,8 +104,7 @@ export default function WeekPicker({
   const visibleEnd = days[Math.min(firstVisible + VISIBLE_DAYS - 1, days.length - 1)];
 
   return (
-    // The row scrolls itself; a drag inside it must not also flip the admin's tabs.
-    <div data-no-swipe data-week-picker>
+    <div data-week-picker>
       <div className="flex items-center justify-between mb-2">
         <button
           type="button"

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AccountSheet from "@/components/admin/AccountSheet";
 import ScissorsLoader from "@/components/ScissorsLoader";
@@ -10,9 +10,6 @@ import BottomNav from "@/components/admin/BottomNav";
 import PushNotificationPrompt from "@/components/admin/PushNotificationPrompt";
 import { useAdminPush, type AdminPushStatus } from "@/components/admin/useAdminPush";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
-import { ADMIN_NAV } from "@/components/admin/adminNav";
-
-const SWIPE_THRESHOLD_PX = 60;
 
 function LogoutIcon() {
   return (
@@ -55,8 +52,6 @@ const PUSH_MESSAGES: Record<AdminPushStatus, string> = {
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const touchStartX = useRef<number | null>(null);
   const { loading } = useAdminData();
   const push = useAdminPush();
   const [pushMessage, setPushMessage] = useState<string | null>(null);
@@ -81,44 +76,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     router.refresh();
   }
 
-  function handleTouchStart(e: React.TouchEvent) {
-    // A drag that starts inside a pop-up or a swipeable control (the week
-    // strip, the calendar, the time wheels) belongs to that control and
-    // must not also flip the tab underneath.
-    if ((e.target as Element).closest("[data-no-swipe]")) {
-      touchStartX.current = null;
-      return;
-    }
-    touchStartX.current = e.touches[0].clientX;
-  }
-
-  // Swipe left/right between tabs, Instagram-tabs style — same directional
-  // slide as tapping the bottom nav, just triggered by a horizontal drag
-  // instead of a tap. Only reacts to the net start->end distance, so it
-  // never fights vertical scrolling or normal taps on buttons/links inside.
-  function handleTouchEnd(e: React.TouchEvent) {
-    const startX = touchStartX.current;
-    touchStartX.current = null;
-    if (startX === null) return;
-
-    const deltaX = e.changedTouches[0].clientX - startX;
-    if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX) return;
-
-    const currentIndex = ADMIN_NAV.findIndex((item) => item.href === pathname);
-    if (currentIndex === -1) return;
-
-    const target = ADMIN_NAV[deltaX < 0 ? currentIndex + 1 : currentIndex - 1];
-    if (!target) return;
-
-    router.push(target.href);
-  }
-
   return (
     <div className="flex-1 flex flex-col">
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-6 pb-28">
         <div
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
           className="bg-white rounded-2xl shadow-lg shadow-black/20 px-4 py-6 sm:px-6"
         >
           <div className="flex items-center justify-between mb-6">
