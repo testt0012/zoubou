@@ -356,7 +356,7 @@ export default function BookingWizard({ initialServices = null }: { initialServi
       {step !== "intro" && (
         <div className="flex justify-center mb-4">
           <Image
-            src="/logo-720.webp" unoptimized
+            src="/logo-dark-720.webp" unoptimized
             alt="Zoubou"
             width={900}
             height={300}
@@ -380,7 +380,7 @@ export default function BookingWizard({ initialServices = null }: { initialServi
             onContextMenu={(e) => e.preventDefault()}
           >
             <Image
-              src="/logo-720.webp" unoptimized
+              src="/logo-dark-720.webp" unoptimized
               alt="Zoubou"
               width={900}
               height={300}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import CustomerShell from "@/components/CustomerShell";
 import ManageAppointment from "@/components/ManageAppointment";
 
 // A private page per appointment — reachable only with its link — so it
@@ -12,8 +13,8 @@ export default async function AppointmentPage(props: PageProps<"/a/[id]">) {
   const { id } = await props.params;
 
   return (
-    <main className="flex-1 flex flex-col justify-center">
+    <CustomerShell>
       <ManageAppointment id={id} />
-    </main>
+    </CustomerShell>
   );
 }

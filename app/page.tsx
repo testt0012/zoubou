@@ -1,3 +1,4 @@
+import CustomerShell from "@/components/CustomerShell";
 import BookingWizard from "@/components/BookingWizard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,8 +27,8 @@ export default async function Home() {
   const services = await loadServices();
 
   return (
-    <main className="flex-1 flex flex-col justify-center">
+    <CustomerShell>
       <BookingWizard initialServices={services} />
-    </main>
+    </CustomerShell>
   );
 }

@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
       // The two big images have fixed, versioned names: keep them for a year
       // so a returning visitor doesn't even ask again.
       {
-        source: "/:file(logo-720.webp|background.webp)",
+        source: "/:file(logo-720.webp|logo-dark-720.webp|background.webp)",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       // The admin area, each customer's private appointment page and the API

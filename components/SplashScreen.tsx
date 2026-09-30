@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import ScissorsLoader from "@/components/ScissorsLoader";
 
 // How long the screen stays at least, so the animation is seen rather than
@@ -15,6 +16,8 @@ const FADE_MS = 350;
 // removed once the app has started. Only on a full page load: moving between
 // screens inside the app doesn't bring it back.
 export default function SplashScreen() {
+  // The customer screens are dark, the admin is light.
+  const dark = !usePathname().startsWith("/admin");
   const [phase, setPhase] = useState<"shown" | "fading" | "gone">("shown");
 
   useEffect(() => {
@@ -39,12 +42,12 @@ export default function SplashScreen() {
       aria-hidden={phase === "fading"}
       data-splash
       style={{ transitionDuration: `${FADE_MS}ms` }}
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-white px-8 transition-opacity ${
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 px-8 ${dark ? "bg-black" : "bg-white"} transition-opacity ${
         phase === "fading" ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
       <Image
-        src="/logo-720.webp"
+        src={dark ? "/logo-dark-720.webp" : "/logo-720.webp"}
         unoptimized
         alt="Zoubou"
         width={900}
@@ -52,7 +55,9 @@ export default function SplashScreen() {
         priority
         className="w-full max-w-[420px] h-auto"
       />
-      <ScissorsLoader className="w-44 h-auto" />
+      <ScissorsLoader
+        className={`w-44 h-auto ${dark ? "[&_[stroke='#262626']]:stroke-neutral-200" : ""}`}
+      />
       <span className="sr-only">Φόρτωση…</span>
     </div>
   );
