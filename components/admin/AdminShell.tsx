@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AccountSheet from "@/components/admin/AccountSheet";
+import ScissorsLoader from "@/components/ScissorsLoader";
 import BottomNav from "@/components/admin/BottomNav";
 import PushNotificationPrompt from "@/components/admin/PushNotificationPrompt";
 import { useAdminPush, type AdminPushStatus } from "@/components/admin/useAdminPush";
@@ -175,7 +176,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </div>
           )}
           {loading ? (
-            <div className="py-16 text-center text-neutral-400 text-sm">Φόρτωση δεδομένων…</div>
+            <div className="py-12 flex flex-col items-center gap-3 text-neutral-400 text-sm">
+              <ScissorsLoader className="w-32 h-auto" />
+              Φόρτωση δεδομένων…
+            </div>
           ) : (
             <>
               <PushNotificationPrompt status={push.status} busy={push.busy} onEnable={handlePushEnable} />

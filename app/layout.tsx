@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
 import InstallPrompt from "@/components/InstallPrompt";
+import SplashScreen from "@/components/SplashScreen";
 import "./globals.css";
 
 const inter = Inter({
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="el" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col text-neutral-900">
         <div className="app-background fixed inset-0 -z-10" aria-hidden="true" />
+        <SplashScreen />
         <RegisterServiceWorker />
         {children}
         <InstallPrompt />
