@@ -3,15 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableSlots } from "@/lib/slots";
 import { isValidDateString } from "@/lib/validation";
 import { todayAthens } from "@/lib/time";
+import { getClientIp } from "@/lib/http";
+import { lastBookableDate } from "@/lib/booking";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
 const RATE_LIMIT_MAX_ATTEMPTS = 60;
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
-}
 
 export async function GET(request: NextRequest) {
   const serviceId = request.nextUrl.searchParams.get("serviceId");
@@ -24,7 +20,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (date < todayAthens()) {
+  const today = todayAthens();
+  if (date < today || date > lastBookableDate(today)) {
     return NextResponse.json({ slots: [] });
   }
 

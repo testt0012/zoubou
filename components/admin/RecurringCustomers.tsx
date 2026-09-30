@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { deleteRecurringCustomer, setRecurringVisitSkipped } from "@/lib/actions/recurring";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import BottomSheet from "@/components/admin/BottomSheet";
+import { RecurringCustomerModal } from "@/components/admin/RecurringCustomerForm";
 import { describeSchedule, type RecurringDayEntry } from "@/lib/recurring";
 import { formatDateLong, formatDateShort, minutesToTime, todayAthens } from "@/lib/time";
 import type { RecurringCustomer } from "@/types/database";
@@ -24,7 +25,8 @@ function RecurringCustomerSheet({
   date?: string;
   onClose: () => void;
 }) {
-  const { refreshRecurringCustomers } = useAdminData();
+  const { services, refreshRecurringCustomers } = useAdminData();
+  const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, startTransition] = useTransition();
@@ -50,6 +52,21 @@ function RecurringCustomerSheet({
     });
   }
 
+  // While editing, the modal takes the sheet's place; closing it (or
+  // saving, which also closes the sheet) goes back.
+  if (editing) {
+    return (
+      <RecurringCustomerModal
+        // Their current service is offered even if it's since been deactivated.
+        services={services.filter((s) => s.active || s.id === customer.service_id)}
+        initial={customer}
+        defaultDate={customer.start_date}
+        onClose={() => setEditing(false)}
+        onSaved={onClose}
+      />
+    );
+  }
+
   return (
     <BottomSheet title={`${customer.first_name} ${customer.last_name}`} onClose={onClose}>
       <div className="flex flex-col gap-3 pt-1">
@@ -66,6 +83,10 @@ function RecurringCustomerSheet({
             Κλήση {customer.mobile}
           </a>
         )}
+
+        <button type="button" onClick={() => setEditing(true)} className={SECONDARY_BUTTON_CLASS}>
+          Επεξεργασία
+        </button>
 
         {date && (
           <button

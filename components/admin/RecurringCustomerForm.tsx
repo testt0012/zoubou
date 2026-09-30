@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addRecurringCustomer } from "@/lib/actions/recurring";
+import { createPortal } from "react-dom";
+import { addRecurringCustomer, updateRecurringCustomer } from "@/lib/actions/recurring";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import AffectedAppointments, { appointmentToAffected } from "@/components/admin/AffectedAppointments";
 import DatePicker from "@/components/admin/DatePicker";
@@ -9,7 +10,7 @@ import TimePicker from "@/components/admin/TimePicker";
 import ToggleRow from "@/components/admin/ToggleRow";
 import { occursOn } from "@/lib/recurring";
 import { minutesToTime, timeToMinutes, weekdayLabel, weekdayOf } from "@/lib/time";
-import type { AppointmentWithService } from "@/types/database";
+import type { AppointmentWithService, RecurringCustomer } from "@/types/database";
 
 interface ServiceOption {
   id: string;
@@ -21,30 +22,37 @@ const INTERVALS = [1, 2, 3];
 const FIELD_CLASS = "w-full min-w-0 h-12 border border-neutral-300 rounded-lg px-3 bg-white text-base text-neutral-900";
 const LABEL_CLASS = "flex flex-col gap-1 text-sm text-neutral-500 min-w-0";
 
-// Adds a regular customer: someone who comes every 1, 2 or 3 weeks on the
-// same weekday. Either at a fixed time (that time is then never offered to
-// anyone else), or — with "Ζώνη ώρας" on — anywhere inside a time zone, in
-// which case the booking flow always keeps one opening in it for them.
-export default function RecurringCustomerForm({
+// The add / edit form for a regular customer: someone who comes every 1, 2
+// or 3 weeks on the same weekday. Either at a fixed time (that time is then
+// never offered to anyone else), or — with "Ζώνη ώρας" on — anywhere inside
+// a time zone, in which case the booking flow always keeps one opening in
+// it for them. With `initial` it edits that customer instead of adding one.
+// Mounted only while open, so it always starts from fresh state.
+export function RecurringCustomerModal({
   services,
+  initial,
   defaultDate,
   minDate,
+  onClose,
+  onSaved,
 }: {
   services: ServiceOption[];
+  initial?: RecurringCustomer;
   defaultDate: string;
-  minDate: string;
+  minDate?: string;
+  onClose: () => void;
+  onSaved?: () => void;
 }) {
   const { appointments, refreshRecurringCustomers } = useAdminData();
-  const [open, setOpen] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
-  const [startDate, setStartDate] = useState(defaultDate);
-  const [intervalWeeks, setIntervalWeeks] = useState(1);
-  const [zone, setZone] = useState(false);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [firstName, setFirstName] = useState(initial?.first_name ?? "");
+  const [lastName, setLastName] = useState(initial?.last_name ?? "");
+  const [mobile, setMobile] = useState(initial?.mobile ?? "");
+  const [serviceId, setServiceId] = useState(initial?.service_id ?? services[0]?.id ?? "");
+  const [startDate, setStartDate] = useState(initial?.start_date ?? defaultDate);
+  const [intervalWeeks, setIntervalWeeks] = useState(initial?.interval_weeks ?? 1);
+  const [zone, setZone] = useState(!!initial?.zone_end_time);
+  const [startTime, setStartTime] = useState(initial?.start_time.slice(0, 5) ?? "");
+  const [endTime, setEndTime] = useState(initial?.zone_end_time?.slice(0, 5) ?? "");
   const [conflicts, setConflicts] = useState<AppointmentWithService[] | null>(null);
   const [isSubmitting, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -54,21 +62,6 @@ export default function RecurringCustomerForm({
   const earliestZoneEnd = startTime ? minutesToTime(Math.min(timeToMinutes(startTime) + duration, 24 * 60 - 1)) : undefined;
   const complete = !!firstName.trim() && !!lastName.trim() && !!serviceId && !!startDate && !!startTime && (!zone || !!endTime);
 
-  function handleOpen() {
-    setFirstName("");
-    setLastName("");
-    setMobile("");
-    setServiceId(services[0]?.id ?? "");
-    setStartDate(defaultDate);
-    setIntervalWeeks(1);
-    setZone(false);
-    setStartTime("");
-    setEndTime("");
-    setConflicts(null);
-    setSubmitError(null);
-    setOpen(true);
-  }
-
   // Already-booked appointments that a fixed standing time would land on.
   // (A zone never collides: it only claims an opening that is still free.)
   function findConflicts(): AppointmentWithService[] {
@@ -77,7 +70,8 @@ export default function RecurringCustomerForm({
     const end = start + duration;
     return appointments.filter(
       (a) =>
-        occursOn({ startDate, intervalWeeks }, a.date) &&
+        a.first_name !== null &&
+        occursOn({ startDate, intervalWeeks, skippedDates: initial?.skipped_dates }, a.date) &&
         timeToMinutes(a.start_time) < end &&
         start < timeToMinutes(a.end_time)
     );
@@ -86,7 +80,7 @@ export default function RecurringCustomerForm({
   function submit() {
     setSubmitError(null);
     startTransition(async () => {
-      const result = await addRecurringCustomer({
+      const input = {
         firstName,
         lastName,
         mobile,
@@ -95,10 +89,12 @@ export default function RecurringCustomerForm({
         intervalWeeks,
         startTime,
         zoneEndTime: zone ? endTime : null,
-      });
+      };
+      const result = initial ? await updateRecurringCustomer(initial.id, input) : await addRecurringCustomer(input);
       if (result.success) {
         await refreshRecurringCustomers();
-        setOpen(false);
+        onSaved?.();
+        onClose();
       } else {
         setConflicts(null);
         setSubmitError(result.error ?? "Κάτι πήγε στραβά.");
@@ -117,33 +113,25 @@ export default function RecurringCustomerForm({
     submit();
   }
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="shrink-0 border border-brand-purple text-brand-purple text-sm font-medium rounded-full px-3.5 py-1.5 active:scale-95 transition-transform"
-      >
-        Μόνιμος+
-      </button>
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl px-4 pt-4 pb-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold">
+            {initial ? "Επεξεργασία μόνιμου πελάτη" : "Προσθήκη μόνιμου πελάτη"}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Κλείσιμο"
+            className="flex items-center justify-center w-10 h-10 -mr-2 text-neutral-400 text-2xl leading-none"
+          >
+            ×
+          </button>
+        </div>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl px-4 pt-4 pb-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold">Προσθήκη μόνιμου πελάτη</h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Κλείσιμο"
-                className="flex items-center justify-center w-10 h-10 -mr-2 text-neutral-400 text-2xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2">
                 <label className={LABEL_CLASS}>
                   Όνομα
@@ -300,7 +288,7 @@ export default function RecurringCustomerForm({
                 <AffectedAppointments
                   people={conflicts.map(appointmentToAffected)}
                   confirmed={false}
-                  confirmLabel="Προσθήκη παρόλα αυτά"
+                  confirmLabel={initial ? "Αποθήκευση παρόλα αυτά" : "Προσθήκη παρόλα αυτά"}
                   onConfirm={submit}
                   onDismiss={() => setConflicts(null)}
                 />
@@ -310,12 +298,45 @@ export default function RecurringCustomerForm({
                   disabled={!complete || isSubmitting}
                   className="h-12 rounded-lg bg-brand-purple text-white font-medium disabled:opacity-60"
                 >
-                  {isSubmitting ? "Αποθήκευση…" : "Προσθήκη"}
+                  {isSubmitting ? "Αποθήκευση…" : initial ? "Αποθήκευση" : "Προσθήκη"}
                 </button>
               )}
-            </form>
-          </div>
-        </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// The "Μόνιμος+" button in the appointments header: opens the add form.
+export default function RecurringCustomerForm({
+  services,
+  defaultDate,
+  minDate,
+}: {
+  services: ServiceOption[];
+  defaultDate: string;
+  minDate: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="shrink-0 border border-brand-purple text-brand-purple text-sm font-medium rounded-full px-3.5 py-1.5 active:scale-95 transition-transform"
+      >
+        Μόνιμος+
+      </button>
+
+      {open && (
+        <RecurringCustomerModal
+          services={services}
+          defaultDate={defaultDate}
+          minDate={minDate}
+          onClose={() => setOpen(false)}
+        />
       )}
     </>
   );

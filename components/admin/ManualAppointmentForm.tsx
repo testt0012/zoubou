@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { createManualAppointment } from "@/lib/actions/appointments";
+import { createManualAppointment, getAdminSlots } from "@/lib/actions/appointments";
 import DatePicker from "@/components/admin/DatePicker";
 
 interface ServiceOption {
@@ -47,10 +47,9 @@ export default function ManualAppointmentForm({
       };
     }
 
-    fetch(`/api/slots?serviceId=${serviceId}&date=${date}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setSlots(data.slots ?? []);
+    getAdminSlots(serviceId, date)
+      .then((result) => {
+        if (!cancelled) setSlots("slots" in result ? result.slots : []);
       })
       .catch(() => {
         if (!cancelled) setSlots([]);

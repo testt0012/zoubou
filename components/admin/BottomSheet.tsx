@@ -46,7 +46,7 @@ export default function BottomSheet({ title, onClose, onDone, children }: Props)
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="sheet-up relative w-full sm:max-w-md bg-white rounded-t-2xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        className="sheet-up relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
       >
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14">
           <button type="button" onClick={onClose} className="justify-self-start h-12 pr-4 text-neutral-500">

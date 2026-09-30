@@ -26,6 +26,7 @@ interface AdminDataValue {
   appointments: AppointmentWithService[];
   recurringCustomers: RecurringCustomer[];
   ensureAppointmentsRange: (from: string, to: string) => Promise<void>;
+  refreshAppointments: () => Promise<void>;
   refreshAvailabilityRules: () => Promise<void>;
   refreshRecurringCustomers: () => Promise<void>;
 }
@@ -258,6 +259,7 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
     appointments,
     recurringCustomers,
     ensureAppointmentsRange,
+    refreshAppointments: () => fetchAppointments(rangeRef.current.from, rangeRef.current.to),
     refreshAvailabilityRules: refetchAvailabilityRules,
     refreshRecurringCustomers: refetchRecurringCustomers,
   };

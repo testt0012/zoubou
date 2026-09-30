@@ -54,8 +54,11 @@ export interface Appointment {
   date: string;
   start_time: string;
   end_time: string;
-  first_name: string;
-  last_name: string;
+  // Wiped (null) by the twice-daily clean-up once an hour has passed since
+  // the appointment ended — the row itself stays so it still counts in the
+  // reports. See migrations 0011 and 0012.
+  first_name: string | null;
+  last_name: string | null;
   mobile: string | null;
   status: AppointmentStatus;
   push_endpoint: string | null;

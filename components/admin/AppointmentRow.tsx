@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { cancelAppointment, uncancelAppointment } from "@/lib/actions/appointments";
+import MoveAppointmentSheet from "@/components/admin/MoveAppointmentSheet";
 import type { AppointmentWithService } from "@/types/database";
 
 // Rendered as one cell in a 3-column grid — just the time, tap for a modal
@@ -19,6 +20,7 @@ export default function AppointmentRow({
   index?: number;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [, startTransition] = useTransition();
@@ -45,6 +47,17 @@ export default function AppointmentRow({
   }
 
   if (hidden) return null;
+
+  // The customer's details are wiped an hour after the appointment ends;
+  // what's left is just the time slot it took up.
+  if (appointment.first_name === null) {
+    return (
+      <div className="rounded-lg px-1 py-2 flex flex-col items-center gap-0.5 bg-neutral-100">
+        <span className="text-sm font-semibold text-neutral-400">{appointment.start_time.slice(0, 5)}</span>
+        <span className="text-[11px] text-neutral-400 leading-tight">ολοκληρώθηκε</span>
+      </div>
+    );
+  }
 
   if (cancelled) {
     return (
@@ -110,13 +123,32 @@ export default function AppointmentRow({
 
             <button
               type="button"
+              onClick={() => setMoveOpen(true)}
+              className="mt-5 w-full h-12 text-base font-medium text-brand-purple border border-brand-purple/40 rounded-lg"
+            >
+              Μετακίνηση
+            </button>
+
+            <button
+              type="button"
               onClick={handleCancel}
-              className="mt-5 w-full text-sm text-red-600 border border-red-200 rounded-md py-2.5"
+              className="mt-3 w-full h-12 text-base text-red-600 border border-red-200 rounded-lg"
             >
               Ακύρωση ραντεβού
             </button>
           </div>
         </div>
+      )}
+
+      {moveOpen && (
+        <MoveAppointmentSheet
+          appointment={appointment}
+          onClose={() => setMoveOpen(false)}
+          onMoved={() => {
+            setMoveOpen(false);
+            setModalOpen(false);
+          }}
+        />
       )}
     </>
   );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Calendar from "@/components/Calendar";
 import { formatDateLong, todayAthens } from "@/lib/time";
+import { lastBookableDate, MAX_ADVANCE_DAYS } from "@/lib/booking";
 import { isPushSupported, subscribeToPush } from "@/lib/push/client";
 
 const ADMIN_HOLD_MS = 3000;
@@ -63,6 +64,13 @@ export default function BookingWizard() {
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+
+  // Days the selected service can still be booked on (see /api/availability),
+  // so the calendar can grey out the rest. "failed" leaves every day within
+  // the booking window pickable rather than blocking the flow.
+  const [availableDates, setAvailableDates] = useState<Set<string> | null>(null);
+  const [datesState, setDatesState] = useState<"loading" | "ready" | "failed">("loading");
+  const availabilityFor = useRef<string | null>(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -125,6 +133,41 @@ export default function BookingWizard() {
 
   useEffect(() => {
     if (step !== "slot" || !selectedService) return;
+    const serviceId = selectedService.id;
+    // Already loaded (or loading) for this service — e.g. coming back from
+    // the details form.
+    if (availabilityFor.current === serviceId) return;
+    availabilityFor.current = serviceId;
+
+    Promise.resolve().then(() => {
+      if (availabilityFor.current !== serviceId) return;
+      setDatesState("loading");
+      setAvailableDates(null);
+    });
+
+    fetch(`/api/availability?serviceId=${serviceId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (availabilityFor.current !== serviceId) return;
+        if (data.error || !Array.isArray(data.dates)) throw new Error("availability");
+        const dates = new Set<string>(data.dates);
+        setAvailableDates(dates);
+        setDatesState("ready");
+        // Land on the first day that can actually be booked.
+        setSelectedDate((current) => (dates.has(current) || dates.size === 0 ? current : data.dates[0]));
+      })
+      .catch(() => {
+        if (availabilityFor.current !== serviceId) return;
+        setDatesState("failed");
+      });
+  }, [step, selectedService]);
+
+  useEffect(() => {
+    if (step !== "slot" || !selectedService) return;
+    // Wait for the calendar's day list first, so the flow doesn't fetch
+    // times for a day it's about to move off (or one that has none).
+    if (datesState === "loading") return;
+    if (availableDates && !availableDates.has(selectedDate)) return;
     let cancelled = false;
 
     Promise.resolve().then(() => {
@@ -151,14 +194,16 @@ export default function BookingWizard() {
     return () => {
       cancelled = true;
     };
-  }, [step, selectedService, selectedDate]);
+  }, [step, selectedService, selectedDate, datesState, availableDates]);
 
   function startBooking() {
+    availabilityFor.current = null;
     if (selectedService) setStep("slot");
     else setStep("service");
   }
 
   function chooseService(s: Service) {
+    availabilityFor.current = null;
     setSelectedService(s);
     setStep("slot");
   }
@@ -350,15 +395,27 @@ export default function BookingWizard() {
             {selectedService.duration_minutes} λεπτά
           </p>
 
-          <div className="mb-4">
-            <Calendar selectedDate={selectedDate} minDate={today} onSelect={setSelectedDate} />
+          <div className={`mb-4 transition-opacity ${datesState === "loading" ? "opacity-50 pointer-events-none" : ""}`}>
+            <Calendar
+              selectedDate={selectedDate}
+              minDate={today}
+              maxDate={lastBookableDate(today)}
+              availableDates={availableDates}
+              onSelect={setSelectedDate}
+            />
           </div>
 
-          <p className="text-sm font-medium mb-2">{formatDateLong(selectedDate)}</p>
+          {datesState === "ready" && availableDates?.size === 0 ? (
+            <p className="text-neutral-500 text-sm text-center">
+              Δεν υπάρχουν διαθέσιμες ημέρες τις επόμενες {MAX_ADVANCE_DAYS / 7} εβδομάδες.
+            </p>
+          ) : (
+            <p className="text-sm font-medium mb-2">{formatDateLong(selectedDate)}</p>
+          )}
 
           {loadingSlots && <p className="text-neutral-500 text-sm">Φόρτωση ωρών…</p>}
           {slotsError && <p className="text-red-600 text-sm">{slotsError}</p>}
-          {!loadingSlots && !slotsError && slots && slots.length === 0 && (
+          {!loadingSlots && !slotsError && slots && slots.length === 0 && availableDates?.size !== 0 && (
             <p className="text-neutral-500 text-sm">
               Δεν υπάρχουν διαθέσιμες ώρες αυτή την ημέρα. Δοκιμάστε άλλη ημερομηνία.
             </p>

@@ -9,15 +9,11 @@ import {
 } from "@/lib/validation";
 import { formatDateLong, minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 import { notifyAdmins } from "@/lib/push/server";
+import { getClientIp } from "@/lib/http";
+import { lastBookableDate } from "@/lib/booking";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
-}
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -48,6 +44,13 @@ export async function POST(request: NextRequest) {
   if (date < todayAthens()) {
     return NextResponse.json(
       { error: "Δεν μπορείτε να κλείσετε ραντεβού σε παρελθοντική ημερομηνία." },
+      { status: 400 }
+    );
+  }
+
+  if (date > lastBookableDate(todayAthens())) {
+    return NextResponse.json(
+      { error: "Μπορείτε να κλείσετε ραντεβού μέχρι 3 εβδομάδες μπροστά." },
       { status: 400 }
     );
   }

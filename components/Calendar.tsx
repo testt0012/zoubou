@@ -34,10 +34,15 @@ interface CalendarProps {
   selectedDate: string;
   // Earlier days can't be picked. Left out, any date (past included) can.
   minDate?: string;
+  // Later days can't be picked (nor can the calendar page past their month).
+  maxDate?: string;
+  // When given, only these dates can be picked — every other day is greyed
+  // out. Null/undefined: no such restriction (e.g. while still loading).
+  availableDates?: ReadonlySet<string> | null;
   onSelect: (date: string) => void;
 }
 
-export default function Calendar({ selectedDate, minDate, onSelect }: CalendarProps) {
+export default function Calendar({ selectedDate, minDate, maxDate, availableDates, onSelect }: CalendarProps) {
   const initial = parseDateString(selectedDate || minDate || todayAthens());
   const [viewYear, setViewYear] = useState(initial.year);
   const [viewMonth, setViewMonth] = useState(initial.month);
@@ -46,8 +51,24 @@ export default function Calendar({ selectedDate, minDate, onSelect }: CalendarPr
   const [direction, setDirection] = useState<1 | -1 | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
+  // The month shown follows the selected date when that changes from
+  // outside (e.g. the booking flow jumping to the first free day).
+  const [shownSelected, setShownSelected] = useState(selectedDate);
+  if (selectedDate !== shownSelected) {
+    setShownSelected(selectedDate);
+    if (selectedDate) {
+      const picked = parseDateString(selectedDate);
+      if (picked.year !== viewYear || picked.month !== viewMonth) {
+        setViewYear(picked.year);
+        setViewMonth(picked.month);
+      }
+    }
+  }
+
   const min = minDate ? parseDateString(minDate) : null;
   const minKey = min ? min.year * 12 + min.month : -Infinity;
+  const max = maxDate ? parseDateString(maxDate) : null;
+  const maxKey = max ? max.year * 12 + max.month : Infinity;
   const viewKey = viewYear * 12 + viewMonth;
 
   const monthLabel = new Intl.DateTimeFormat("el-GR", {
@@ -58,6 +79,7 @@ export default function Calendar({ selectedDate, minDate, onSelect }: CalendarPr
 
   function changeMonth(delta: 1 | -1) {
     if (delta === -1 && viewKey <= minKey) return;
+    if (delta === 1 && viewKey >= maxKey) return;
     setDirection(delta);
     let y = viewYear;
     let m = viewMonth + delta;
@@ -114,7 +136,8 @@ export default function Calendar({ selectedDate, minDate, onSelect }: CalendarPr
         <button
           type="button"
           onClick={() => changeMonth(1)}
-          className="w-10 h-10 rounded-full text-xl text-neutral-500 hover:bg-neutral-100"
+          disabled={viewKey >= maxKey}
+          className="w-10 h-10 rounded-full text-xl text-neutral-500 disabled:opacity-30 hover:bg-neutral-100"
           aria-label="Επόμενος μήνας"
         >
           ›
@@ -135,7 +158,10 @@ export default function Calendar({ selectedDate, minDate, onSelect }: CalendarPr
           if (day === null) return <div key={`empty-${i}`} />;
 
           const dateStr = toDateString(viewYear, viewMonth, day);
-          const disabled = !!minDate && dateStr < minDate;
+          const disabled =
+            (!!minDate && dateStr < minDate) ||
+            (!!maxDate && dateStr > maxDate) ||
+            (!!availableDates && !availableDates.has(dateStr));
           const isSelected = dateStr === selectedDate;
 
           return (

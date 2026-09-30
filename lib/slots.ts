@@ -7,7 +7,11 @@ import {
   placeReservations,
   toRecurringVisit,
   zoneReservationsFor,
+  type RecurringVisit,
 } from "@/lib/recurring";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = SupabaseClient<any, any, any>;
 
 export type SlotError = "service_not_found" | "invalid_date";
 
@@ -16,13 +20,45 @@ export interface SlotsResult {
   serviceDurationMinutes: number;
 }
 
+interface WeeklyRule {
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
+interface DatedSpan {
+  date: string;
+  start_time: string;
+  end_time: string;
+}
+
+interface BookedSpan extends DatedSpan {
+  id: string;
+}
+
+// Everything the slot maths needs, already fetched — for one date or for a
+// whole range of them (the same data serves every date in it).
+interface SlotInputs {
+  duration: number;
+  buffer: number;
+  rules: WeeklyRule[];
+  blocked: DatedSpan[];
+  booked: BookedSpan[];
+  visits: RecurringVisit[];
+}
+
+const toInterval = (s: { start_time: string; end_time: string }): Interval => ({
+  start: timeToMinutes(s.start_time),
+  end: timeToMinutes(s.end_time),
+});
+
 /**
- * Computes bookable start times ("HH:MM") for a given service on a given
- * Athens calendar date: weekly availability windows, minus blocked slots,
- * minus existing confirmed appointments (padded by the configured buffer),
- * minus what's held for regular customers (see lib/recurring.ts: a fixed
- * time is simply taken; a time zone keeps one opening free, so the last
- * free slot in it isn't offered), and never in the past.
+ * The bookable start times (minutes since midnight) on one Athens date:
+ * weekly availability windows, minus blocked slots, minus existing confirmed
+ * appointments (padded by the configured buffer), minus what's held for
+ * regular customers (see lib/recurring.ts: a fixed time is simply taken; a
+ * time zone keeps one opening free, so the last free slot in it isn't
+ * offered), and never in the past.
  *
  * Slots are stepped by the service's own duration, back to back, starting
  * from the beginning of each free stretch — a 40' service in a window
@@ -30,80 +66,30 @@ export interface SlotsResult {
  * ends at 12:15, carries on from 12:15, 12:55… — so changing a service's
  * duration in the admin reshapes its slots and no dead gaps are left
  * between appointments.
- *
- * Used both by GET /api/slots (to show clients options) and by POST /api/book
- * (to re-validate the chosen slot server-side before insert) — the exclusion
- * constraint in the database is the final, authoritative race-condition guard,
- * this function is what makes the UI/validation actually usable.
  */
-export async function computeAvailableSlots(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: SupabaseClient<any, any, any>,
-  serviceId: string,
-  date: string
-): Promise<SlotsResult | { error: SlotError }> {
-  const { data: service, error: serviceError } = await supabase
-    .from("services")
-    .select("id, duration_minutes, active")
-    .eq("id", serviceId)
-    .eq("active", true)
-    .maybeSingle();
+function slotsForDate(
+  inputs: SlotInputs,
+  date: string,
+  now: { date: string; minutes: number },
+  excludeAppointmentId?: string
+): number[] {
+  const { duration, buffer, visits } = inputs;
+  const weekday = weekdayOf(date);
 
-  if (serviceError || !service) {
-    return { error: "service_not_found" };
-  }
-
-  const duration = service.duration_minutes as number;
-
-  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }, { data: regulars }] =
-    await Promise.all([
-      supabase.from("settings").select("*").eq("id", true).maybeSingle(),
-      supabase
-        .from("availability_rules")
-        .select("start_time, end_time")
-        .eq("weekday", weekdayOf(date)),
-      supabase.from("blocked_slots").select("start_time, end_time").eq("date", date),
-      supabase
-        .from("appointments")
-        .select("start_time, end_time")
-        .eq("date", date)
-        .eq("status", "confirmed"),
-      // Errors (e.g. the table not existing before migration 0009) just
-      // mean "no regulars".
-      supabase
-        .from("recurring_customers")
-        .select("*, services(duration_minutes)")
-        .lte("start_date", date),
-    ]);
-
-  const buffer = settings?.buffer_minutes ?? 0;
-
-  const windows: Interval[] = (rules ?? []).map((r) => ({
-    start: timeToMinutes(r.start_time),
-    end: timeToMinutes(r.end_time),
-  }));
-
-  const visits = (regulars ?? []).map((r) => {
-    const joined = r.services as { duration_minutes: number } | { duration_minutes: number }[] | null;
-    const regularService = Array.isArray(joined) ? joined[0] : joined;
-    return toRecurringVisit(r, regularService?.duration_minutes ?? 0);
-  });
+  const windows = inputs.rules.filter((r) => r.weekday === weekday).map(toInterval);
 
   const busy: Interval[] = [
     ...fixedIntervalsFor(visits, date),
-    ...(blocked ?? []).map((b) => ({
-      start: timeToMinutes(b.start_time),
-      end: timeToMinutes(b.end_time),
-    })),
-    ...(booked ?? []).map((a) => ({
-      start: timeToMinutes(a.start_time) - buffer,
-      end: timeToMinutes(a.end_time) + buffer,
-    })),
+    ...inputs.blocked.filter((b) => b.date === date).map(toInterval),
+    ...inputs.booked
+      .filter((a) => a.date === date && a.id !== excludeAppointmentId)
+      .map((a) => ({
+        start: timeToMinutes(a.start_time) - buffer,
+        end: timeToMinutes(a.end_time) + buffer,
+      })),
   ];
 
-  const now = athensNow();
   const isToday = now.date === date;
-
   const freeSegments = subtractIntervals(windows, busy);
 
   // A zone regular can only still be seated in what's left of today. Only
@@ -113,7 +99,6 @@ export async function computeAvailableSlots(
   const zones = placeReservations(reservable, zoneReservationsFor(visits, date));
 
   const results: number[] = [];
-
   for (const free of freeSegments) {
     for (let start = free.start; start + duration <= free.end; start += duration) {
       if (isToday && start <= now.minutes) continue;
@@ -122,9 +107,132 @@ export async function computeAvailableSlots(
     }
   }
 
-  const slots = Array.from(new Set(results))
-    .sort((a, b) => a - b)
-    .map(minutesToTime);
+  return Array.from(new Set(results)).sort((a, b) => a - b);
+}
+
+async function loadService(supabase: Db, serviceId: string): Promise<number | null> {
+  const { data: service, error } = await supabase
+    .from("services")
+    .select("id, duration_minutes, active")
+    .eq("id", serviceId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error || !service) return null;
+  return service.duration_minutes as number;
+}
+
+// Errors (e.g. the table not existing before migration 0009) just mean "no
+// regulars".
+async function loadRegulars(supabase: Db, upTo: string): Promise<RecurringVisit[]> {
+  const { data } = await supabase
+    .from("recurring_customers")
+    .select("*, services(duration_minutes)")
+    .lte("start_date", upTo);
+
+  return (data ?? []).map((r) => {
+    const joined = r.services as { duration_minutes: number } | { duration_minutes: number }[] | null;
+    const regularService = Array.isArray(joined) ? joined[0] : joined;
+    return toRecurringVisit(r, regularService?.duration_minutes ?? 0);
+  });
+}
+
+/**
+ * Bookable start times ("HH:MM") for a service on one date.
+ *
+ * Used both by GET /api/slots (to show clients options) and by POST /api/book
+ * (to re-validate the chosen slot server-side before insert) — the exclusion
+ * constraint in the database is the final, authoritative race-condition guard,
+ * this function is what makes the UI/validation actually usable.
+ *
+ * `excludeAppointmentId` ignores one existing appointment, so it can be
+ * moved to a time that overlaps its own current one.
+ */
+export async function computeAvailableSlots(
+  supabase: Db,
+  serviceId: string,
+  date: string,
+  options: { excludeAppointmentId?: string } = {}
+): Promise<SlotsResult | { error: SlotError }> {
+  const duration = await loadService(supabase, serviceId);
+  if (duration === null) return { error: "service_not_found" };
+
+  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }, visits] = await Promise.all([
+    supabase.from("settings").select("*").eq("id", true).maybeSingle(),
+    supabase.from("availability_rules").select("weekday, start_time, end_time").eq("weekday", weekdayOf(date)),
+    supabase.from("blocked_slots").select("date, start_time, end_time").eq("date", date),
+    supabase
+      .from("appointments")
+      .select("id, date, start_time, end_time")
+      .eq("date", date)
+      .eq("status", "confirmed"),
+    loadRegulars(supabase, date),
+  ]);
+
+  const slots = slotsForDate(
+    {
+      duration,
+      buffer: settings?.buffer_minutes ?? 0,
+      rules: rules ?? [],
+      blocked: blocked ?? [],
+      booked: booked ?? [],
+      visits,
+    },
+    date,
+    athensNow(),
+    options.excludeAppointmentId
+  ).map(minutesToTime);
 
   return { slots, serviceDurationMinutes: duration };
+}
+
+/**
+ * Every date in [from, to] with at least one bookable time for the service —
+ * what the customer's calendar uses to grey out closed and fully-booked
+ * days. Loads everything once for the whole range instead of once per date.
+ */
+export async function computeAvailableDates(
+  supabase: Db,
+  serviceId: string,
+  from: string,
+  to: string
+): Promise<{ dates: string[] } | { error: SlotError }> {
+  const duration = await loadService(supabase, serviceId);
+  if (duration === null) return { error: "service_not_found" };
+
+  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }, visits] = await Promise.all([
+    supabase.from("settings").select("*").eq("id", true).maybeSingle(),
+    supabase.from("availability_rules").select("weekday, start_time, end_time"),
+    supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", from).lte("date", to),
+    supabase
+      .from("appointments")
+      .select("id, date, start_time, end_time")
+      .gte("date", from)
+      .lte("date", to)
+      .eq("status", "confirmed"),
+    loadRegulars(supabase, to),
+  ]);
+
+  const inputs: SlotInputs = {
+    duration,
+    buffer: settings?.buffer_minutes ?? 0,
+    rules: rules ?? [],
+    blocked: blocked ?? [],
+    booked: booked ?? [],
+    visits,
+  };
+
+  const now = athensNow();
+  const dates: string[] = [];
+  for (let date = from; date <= to; date = nextDate(date)) {
+    if (slotsForDate(inputs, date, now).length > 0) dates.push(date);
+  }
+
+  return { dates };
+}
+
+function nextDate(date: string): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }

@@ -35,8 +35,8 @@ function formatBookedAt(createdAt: string): string {
 export function appointmentToAffected(a: AppointmentWithService): AffectedPerson {
   return {
     key: a.id,
-    firstName: a.first_name,
-    lastName: a.last_name,
+    firstName: a.first_name ?? "",
+    lastName: a.last_name ?? "",
     mobile: a.mobile,
     date: a.date,
     time: `${a.start_time.slice(0, 5)}–${a.end_time.slice(0, 5)}`,

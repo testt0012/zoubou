@@ -2,7 +2,7 @@
 
 import { requireAdmin } from "@/lib/supabase/server";
 import { isValidDateString, isValidTimeString, normalizeGreekMobile, sanitizeName } from "@/lib/validation";
-import { minutesToTime, timeToMinutes } from "@/lib/time";
+import { minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 import { computeAvailableSlots } from "@/lib/slots";
 
 // Called directly from client code (not a <form action>) so the UI can
@@ -16,6 +16,24 @@ export async function cancelAppointment(id: string) {
 export async function uncancelAppointment(id: string) {
   const { supabase } = await requireAdmin();
   await supabase.from("appointments").update({ status: "confirmed" }).eq("id", id);
+}
+
+// The admin's own view of a day's free times (manual booking, moving an
+// appointment). Unlike the customers' /api/slots it isn't capped at three
+// weeks ahead and isn't rate-limited. `excludeAppointmentId` treats that one
+// appointment as not there, so it can move to a time overlapping its own.
+export async function getAdminSlots(
+  serviceId: string,
+  date: string,
+  excludeAppointmentId?: string
+): Promise<{ slots: string[] } | { error: string }> {
+  const { supabase } = await requireAdmin();
+  if (!serviceId || !isValidDateString(date)) return { error: "Μη έγκυρα στοιχεία." };
+
+  const result = await computeAvailableSlots(supabase, serviceId, date, { excludeAppointmentId });
+  if ("error" in result) return { error: "Η υπηρεσία δεν βρέθηκε." };
+
+  return { slots: date < todayAthens() ? [] : result.slots };
 }
 
 export interface CreateManualAppointmentResult {
@@ -84,6 +102,65 @@ export async function createManualAppointment(
       return { success: false, error: "Η ώρα αυτή μόλις κλείστηκε. Επιλέξτε άλλη ώρα." };
     }
     return { success: false, error: "Σφάλμα κατά τη δημιουργία του ραντεβού." };
+  }
+
+  return { success: true };
+}
+
+// Moves a confirmed appointment to another date/time. The new time is
+// re-validated the same way a new booking is (open hours, not blocked, not
+// held for a regular customer, not overlapping another appointment — its
+// own current slot excluded), with the database's exclusion constraint as
+// the last-resort guard. The reminder is re-armed for the new day.
+export async function moveAppointment(
+  id: string,
+  date: string,
+  startTime: string
+): Promise<CreateManualAppointmentResult> {
+  const { supabase } = await requireAdmin();
+
+  if (!id || !isValidDateString(date) || !isValidTimeString(startTime)) {
+    return { success: false, error: "Μη έγκυρα στοιχεία." };
+  }
+  if (date < todayAthens()) {
+    return { success: false, error: "Δεν μπορείτε να μετακινήσετε ραντεβού σε παρελθοντική ημερομηνία." };
+  }
+
+  const { data: appointment } = await supabase
+    .from("appointments")
+    .select("id, service_id, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!appointment || appointment.status !== "confirmed") {
+    return { success: false, error: "Το ραντεβού δεν βρέθηκε." };
+  }
+
+  const result = await computeAvailableSlots(supabase, appointment.service_id, date, {
+    excludeAppointmentId: id,
+  });
+  if ("error" in result) return { success: false, error: "Η υπηρεσία δεν βρέθηκε." };
+
+  if (!result.slots.includes(startTime)) {
+    return { success: false, error: "Η ώρα αυτή δεν είναι διαθέσιμη. Επιλέξτε άλλη ώρα." };
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({
+      date,
+      start_time: startTime,
+      end_time: minutesToTime(timeToMinutes(startTime) + result.serviceDurationMinutes),
+      reminder_sent: false,
+    })
+    .eq("id", id)
+    .eq("status", "confirmed");
+
+  if (error) {
+    if (error.code === "23P01") {
+      return { success: false, error: "Η ώρα αυτή μόλις κλείστηκε. Επιλέξτε άλλη ώρα." };
+    }
+    return { success: false, error: "Σφάλμα κατά τη μετακίνηση του ραντεβού." };
   }
 
   return { success: true };
