@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import BottomSheet from "@/components/admin/BottomSheet";
-import WeekPicker from "@/components/admin/WeekPicker";
+import WeekPicker from "@/components/WeekPicker";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { getAdminSlots, moveAppointment } from "@/lib/actions/appointments";
 import { formatDateLong, todayAthens } from "@/lib/time";

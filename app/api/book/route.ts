@@ -10,6 +10,7 @@ import {
 import { formatDateLong, minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 import { notifyAdmins } from "@/lib/push/server";
 import { getClientIp, slotErrorResponse } from "@/lib/http";
+import { logError } from "@/lib/errorLog";
 import { lastBookableDate } from "@/lib/booking";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
@@ -90,6 +91,8 @@ export async function POST(request: NextRequest) {
   );
 
   if (rateLimitError) {
+    after(() => logError("api/book", rateLimitError));
+    after(() => logError("api/book", insertError));
     return NextResponse.json(
       { error: "Σφάλμα κατά τη δημιουργία του ραντεβού." },
       { status: 500 }
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await computeAvailableSlots(supabase, serviceId, date);
-  if ("error" in result) return slotErrorResponse(result.error);
+  if ("error" in result) return slotErrorResponse(result.error, "api/book");
 
   if (!result.slots.includes(startTime)) {
     return NextResponse.json(

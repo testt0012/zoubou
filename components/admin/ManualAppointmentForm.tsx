@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createManualAppointment, getAdminSlots } from "@/lib/actions/appointments";
-import WeekPicker from "@/components/admin/WeekPicker";
+import WeekPicker from "@/components/WeekPicker";
 
 interface ServiceOption {
   id: string;

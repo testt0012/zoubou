@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { athensNow, minutesToTime, timeToMinutes, weekdayOf } from "@/lib/time";
-import { subtractIntervals, type Interval } from "@/lib/occupancy";
+import { subtractIntervals, workingMinutesForDate, type Interval } from "@/lib/occupancy";
 import {
   fixedIntervalsFor,
   leavesRoomFor,
@@ -14,6 +14,18 @@ import {
 type Db = SupabaseClient<any, any, any>;
 
 export type SlotError = "service_not_found" | "invalid_date" | "unavailable";
+
+export interface DayAvailability {
+  open: boolean;
+  count: number;
+}
+
+export interface DatesResult {
+  // Days with at least one free time.
+  dates: string[];
+  // Every day in the range: whether the shop is open and how many times are free.
+  days: Record<string, DayAvailability>;
+}
 
 export interface SlotsResult {
   slots: string[];
@@ -215,7 +227,7 @@ export async function computeAvailableDates(
   from: string,
   to: string,
   options: SlotOptions = {}
-): Promise<{ dates: string[] } | { error: SlotError }> {
+): Promise<DatesResult | { error: SlotError }> {
   const duration = await loadService(supabase, serviceId);
   if (typeof duration !== "number") return { error: duration };
 
@@ -247,11 +259,17 @@ export async function computeAvailableDates(
 
   const now = options.now ?? athensNow();
   const dates: string[] = [];
+  const days: Record<string, DayAvailability> = {};
   for (let date = from; date <= to; date = nextDate(date)) {
-    if (slotsForDate(inputs, date, now, options.excludeAppointmentId).length > 0) dates.push(date);
+    const count = slotsForDate(inputs, date, now, options.excludeAppointmentId).length;
+    // "Open" is about the shop's hours, not about what's left: a full day is
+    // open with 0 free times, a day with no hours (or closed by a vacation
+    // or an all-day closure) is not open at all.
+    days[date] = { open: workingMinutesForDate(inputs.rules, inputs.blocked, date) > 0, count };
+    if (count > 0) dates.push(date);
   }
 
-  return { dates };
+  return { dates, days };
 }
 
 function nextDate(date: string): string {

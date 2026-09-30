@@ -4,6 +4,8 @@ import { computeAvailableDates } from "@/lib/slots";
 import { loadOwnAppointment } from "@/lib/customerAppointment";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { slotErrorResponse } from "@/lib/http";
+import { logError } from "@/lib/errorLog";
+import { after } from "next/server";
 import { lastBookableDate } from "@/lib/booking";
 import { todayAthens } from "@/lib/time";
 
@@ -18,7 +20,10 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/appointm
   if (!appointment.canChange) return NextResponse.json({ dates: [] });
 
   const limit = await checkRateLimit(supabase, request, "slots");
-  if (limit === "error") return NextResponse.json({ error: "Σφάλμα φόρτωσης διαθέσιμων ημερών." }, { status: 500 });
+  if (limit === "error") {
+    after(() => logError("api/appointments/availability", "rate limit check failed"));
+    return NextResponse.json({ error: "Σφάλμα φόρτωσης διαθέσιμων ημερών." }, { status: 500 });
+  }
   if (limit === "limited") {
     return NextResponse.json({ error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." }, { status: 429 });
   }
@@ -27,7 +32,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/appointm
   const result = await computeAvailableDates(supabase, appointment.serviceId, today, lastBookableDate(today), {
     excludeAppointmentId: appointment.id,
   });
-  if ("error" in result) return slotErrorResponse(result.error);
+  if ("error" in result) return slotErrorResponse(result.error, "api/appointments/availability");
 
-  return NextResponse.json({ dates: result.dates });
+  return NextResponse.json({ dates: result.dates, days: result.days });
 }

@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { addDays, todayAthens } from "@/lib/time";
 import { sendPush } from "@/lib/push/server";
+import { checkHealth } from "@/lib/health";
+import { logError } from "@/lib/errorLog";
 
 // Runs once a day (see vercel.json) and pushes a reminder to every
 // tomorrow's confirmed appointment that has an attached push subscription.
 // Marked reminder_sent right after each attempt (success or failure) —
 // there's no same-day retry path, and by tomorrow the reminder would be
 // for the wrong day anyway.
+//
+// It also checks that the other scheduled jobs are doing their work (see
+// lib/health.ts) and reports any that have silently stopped.
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -17,7 +22,13 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   const tomorrow = addDays(todayAthens(), 1);
 
-  const { data: appointments } = await supabase
+  try {
+    for (const issue of await checkHealth(supabase, todayAthens())) await logError("health", issue);
+  } catch (error) {
+    await logError("cron/reminders (health check)", error);
+  }
+
+  const { data: appointments, error: queryError } = await supabase
     .from("appointments")
     .select("id, start_time, push_endpoint, push_p256dh, push_auth, services(name)")
     .eq("date", tomorrow)
@@ -25,8 +36,9 @@ export async function GET(request: NextRequest) {
     .eq("reminder_sent", false)
     .not("push_endpoint", "is", null);
 
-  let sent = 0;
+  if (queryError) await logError("cron/reminders", queryError);
 
+  let sent = 0;
   for (const a of appointments ?? []) {
     if (!a.push_endpoint || !a.push_p256dh || !a.push_auth) continue;
 

@@ -13,18 +13,40 @@ import {
 
 const SWIPE_THRESHOLD_PX = 50;
 
+function availabilityText(info: { open: boolean; count: number }): string {
+  if (!info.open) return "Κλειστά";
+  return info.count === 1 ? "1 ραντεβού διαθέσιμο" : `${info.count} ραντεβού διαθέσιμα`;
+}
+
 // Picks a day one week at a time: a row of seven days (Monday to Sunday)
 // with arrows — or a swipe — to move to the next or previous week. Meant for
 // placing appointments, which are nearly always within the next few days,
-// where a whole month grid is more than needed.
+// where a whole month grid is more than needed. Used by both the customers'
+// booking screens and the admin.
 export default function WeekPicker({
   value,
   onChange,
   minDate,
+  maxDate,
+  availableDates,
+  dayInfo,
+  hideLabel = false,
 }: {
   value: string;
   onChange: (date: string) => void;
+  // Earlier / later days can't be picked (nor can the strip page past them).
   minDate?: string;
+  maxDate?: string;
+  // When given (and no `dayInfo`), only these days can be picked — every other
+  // day is greyed out. Null/undefined: no such restriction (e.g. while loading).
+  availableDates?: ReadonlySet<string> | null;
+  // When given, each day shows how many free times it has — "—" if the shop
+  // isn't open that day (greyed out, can't be picked), "0" if it's open but
+  // full (can be picked to read "0 ραντεβού διαθέσιμα") — and so does the
+  // line under the strip.
+  dayInfo?: Readonly<Record<string, { open: boolean; count: number }>> | null;
+  // The chosen day is also written out under the strip unless this is set.
+  hideLabel?: boolean;
 }) {
   const firstWeek = startOfWeek(minDate && minDate > (value || "") ? minDate : value || minDate || todayAthens());
   const [weekStart, setWeekStart] = useState(firstWeek);
@@ -40,10 +62,12 @@ export default function WeekPicker({
 
   const earliestWeek = minDate ? startOfWeek(minDate) : null;
   const canGoBack = !earliestWeek || weekStart > earliestWeek;
+  const canGoForward = !maxDate || addDays(weekStart, 7) <= maxDate;
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   function changeWeek(delta: 1 | -1) {
     if (delta === -1 && !canGoBack) return;
+    if (delta === 1 && !canGoForward) return;
     setDirection(delta);
     setWeekStart(addDays(weekStart, delta * 7));
   }
@@ -82,8 +106,9 @@ export default function WeekPicker({
         <button
           type="button"
           onClick={() => changeWeek(1)}
+          disabled={!canGoForward}
           aria-label="Επόμενη εβδομάδα"
-          className="w-11 h-11 rounded-full text-xl text-neutral-500 hover:bg-neutral-100"
+          className="w-11 h-11 rounded-full text-xl text-neutral-500 disabled:opacity-30 hover:bg-neutral-100"
         >
           ›
         </button>
@@ -96,8 +121,15 @@ export default function WeekPicker({
         }`}
       >
         {days.map((date) => {
-          const disabled = !!minDate && date < minDate;
           const selected = date === value;
+          const info = dayInfo?.[date];
+          // With per-day info, a day is pickable whenever the shop is open —
+          // a full day can be tapped to read "0 ραντεβού διαθέσιμα". Without it,
+          // `availableDates` (if given) decides.
+          const disabled =
+            (!!minDate && date < minDate) ||
+            (!!maxDate && date > maxDate) ||
+            (dayInfo ? !info?.open : !!availableDates && !availableDates.has(date));
           return (
             <button
               type="button"
@@ -106,7 +138,7 @@ export default function WeekPicker({
               aria-pressed={selected}
               aria-label={formatDateLong(date)}
               onClick={() => onChange(date)}
-              className={`h-16 rounded-lg border flex flex-col items-center justify-center gap-0.5 ${
+              className={`${dayInfo ? "h-[72px]" : "h-16"} rounded-lg border flex flex-col items-center justify-center gap-0.5 ${
                 selected
                   ? "border-brand-purple bg-brand-purple text-white"
                   : disabled
@@ -118,12 +150,22 @@ export default function WeekPicker({
                 {weekdayLabel(weekdayOf(date)).slice(0, 2)}
               </span>
               <span className="text-base font-semibold">{date.slice(8, 10)}</span>
+              {info && (
+                <span className={`text-[11px] font-medium ${selected ? "text-white/90" : disabled ? "" : "text-brand-purple"}`}>
+                  {info.open ? info.count : "—"}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {value && <p className="mt-2 text-sm text-neutral-500">{formatDateLong(value)}</p>}
+      {value && !hideLabel && (
+        <p className="mt-2 text-sm text-neutral-500">
+          {formatDateLong(value)}
+          {dayInfo?.[value] && <> · {availabilityText(dayInfo[value])}</>}
+        </p>
+      )}
     </div>
   );
 }

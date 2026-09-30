@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import Calendar from "@/components/Calendar";
+import WeekPicker from "@/components/WeekPicker";
 import { CHANGE_DEADLINE_HOURS, lastBookableDate, MAX_ADVANCE_DAYS } from "@/lib/booking";
 import { formatDateLong, todayAthens } from "@/lib/time";
 
@@ -35,6 +35,7 @@ export default function ManageAppointment({ id }: { id: string }) {
   // Moving: the days that have a free time, the chosen day, its times.
   const today = todayAthens();
   const [availableDates, setAvailableDates] = useState<Set<string> | null>(null);
+  const [dayInfo, setDayInfo] = useState<Record<string, { open: boolean; count: number }> | null>(null);
   const [datesState, setDatesState] = useState<"loading" | "ready" | "failed">("loading");
   const [selectedDate, setSelectedDate] = useState(today);
   const [slots, setSlots] = useState<string[] | null>(null);
@@ -76,7 +77,14 @@ export default function ManageAppointment({ id }: { id: string }) {
         setSlots([]);
       } else {
         // Its own current time isn't a move.
-        setSlots((data.slots as string[]).filter((t) => !(date === current.date && t === current.start)));
+        const list = (data.slots as string[]).filter((t) => !(date === current.date && t === current.start));
+        setSlots(list);
+        // The day's number on the strip follows what was really listed.
+        setDayInfo((prev) =>
+          prev && prev[date] && prev[date].open && prev[date].count !== list.length
+            ? { ...prev, [date]: { ...prev[date], count: list.length } }
+            : prev
+        );
       }
     } catch {
       if (request === slotsRequest.current) {
@@ -96,14 +104,19 @@ export default function ManageAppointment({ id }: { id: string }) {
     setSlots(null);
     setDatesState("loading");
     setAvailableDates(null);
+    setDayInfo(null);
     setSelectedDate(details.date >= today ? details.date : today);
 
     let dates: string[] | null = null;
+    let days: Record<string, { open: boolean; count: number }> | null = null;
     try {
       const res = await fetch(`/api/appointments/${id}/availability`);
       const data = await res.json();
       if (!res.ok) setError(data.error ?? "Σφάλμα φόρτωσης διαθέσιμων ημερών.");
-      else dates = data.dates as string[];
+      else {
+        dates = data.dates as string[];
+        days = (data.days as Record<string, { open: boolean; count: number }>) ?? null;
+      }
     } catch {
       setError("Σφάλμα φόρτωσης διαθέσιμων ημερών.");
     }
@@ -114,6 +127,7 @@ export default function ManageAppointment({ id }: { id: string }) {
     }
     const set = new Set(dates);
     setAvailableDates(set);
+    setDayInfo(days);
     setDatesState("ready");
     // Start on the current day when it still has other times, otherwise on
     // the first day that has any.
@@ -126,6 +140,14 @@ export default function ManageAppointment({ id }: { id: string }) {
     if (!details) return;
     setSelectedDate(date);
     setSelectedSlot(null);
+    // A day with no free time left has nothing to fetch; the strip says so.
+    if (dayInfo?.[date]?.count === 0) {
+      slotsRequest.current++;
+      setSlots([]);
+      setLoadingSlots(false);
+      setError(null);
+      return;
+    }
     void loadSlots(date, details);
   }
 
@@ -276,12 +298,14 @@ export default function ManageAppointment({ id }: { id: string }) {
               </p>
 
               <div className={`mb-4 transition-opacity ${datesState === "loading" ? "opacity-50 pointer-events-none" : ""}`}>
-                <Calendar
-                  selectedDate={selectedDate}
+                <WeekPicker
+                  value={selectedDate}
+                  onChange={chooseDate}
                   minDate={today}
                   maxDate={lastBookableDate(today)}
                   availableDates={availableDates}
-                  onSelect={chooseDate}
+                  dayInfo={dayInfo}
+                  hideLabel={datesState === "ready" && availableDates?.size === 0}
                 />
               </div>
 
@@ -290,7 +314,7 @@ export default function ManageAppointment({ id }: { id: string }) {
                   Δεν υπάρχουν διαθέσιμες ημέρες τις επόμενες {MAX_ADVANCE_DAYS / 7} εβδομάδες.
                 </p>
               ) : (
-                <p className="text-sm font-medium mb-2">{formatDateLong(selectedDate)}</p>
+                !dayInfo && <p className="text-sm font-medium mb-2">{formatDateLong(selectedDate)}</p>
               )}
 
               {loadingSlots && <p className="text-neutral-500 text-sm">Φόρτωση ωρών…</p>}

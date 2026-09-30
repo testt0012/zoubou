@@ -34,3 +34,25 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+## Monitoring
+
+Unexpected server-side failures (booking, cancel/move, unreadable database
+answers, failed nightly jobs) are written to the `error_log` table
+(`supabase/migrations/0017_error_log.sql`) — without customer names or phone
+numbers — and the developer is alerted. Alerts are optional and configured with
+environment variables in Vercel:
+
+- `ALERT_NTFY_TOPIC` — a secret, hard-to-guess topic name on ntfy.sh. Install
+  the free ntfy app and subscribe to the same topic to get a push notification.
+- `ALERT_WEBHOOK_URL` — a Discord or Slack incoming-webhook URL.
+
+The daily reminders job also checks that the other scheduled jobs (the wipe of
+personal details, the nightly report snapshot) are really running, and reports
+any that have silently stopped. Read the log in the Supabase table editor.
+
+## Tests
+
+`npm test` runs the automated checks (booking and free-time rules, regular
+customers, reports, nightly snapshot, validation, error log, job health).

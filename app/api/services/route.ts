@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logError } from "@/lib/errorLog";
 
 export async function GET() {
   const supabase = createAdminClient();
@@ -11,6 +12,7 @@ export async function GET() {
     .order("sort_order", { ascending: true });
 
   if (error) {
+    await logError("api/services", error);
     return NextResponse.json(
       { error: "Σφάλμα φόρτωσης υπηρεσιών." },
       { status: 500 }

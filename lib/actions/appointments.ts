@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { isValidDateString, isValidTimeString, normalizeGreekMobile, sanitizeName } from "@/lib/validation";
 import { minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 import { computeAvailableSlots, type SlotError } from "@/lib/slots";
+import { logError } from "@/lib/errorLog";
 
 function slotErrorMessage(error: SlotError): string {
   return error === "unavailable" ? "Προσωρινό σφάλμα. Δοκιμάστε ξανά σε λίγο." : "Η υπηρεσία δεν βρέθηκε.";
@@ -105,6 +106,7 @@ export async function createManualAppointment(
     if (error.code === "23P01") {
       return { success: false, error: "Η ώρα αυτή μόλις κλείστηκε. Επιλέξτε άλλη ώρα." };
     }
+    await logError("action/createManualAppointment", error);
     return { success: false, error: "Σφάλμα κατά τη δημιουργία του ραντεβού." };
   }
 
@@ -164,6 +166,7 @@ export async function moveAppointment(
     if (error.code === "23P01") {
       return { success: false, error: "Η ώρα αυτή μόλις κλείστηκε. Επιλέξτε άλλη ώρα." };
     }
+    await logError("action/moveAppointment", error);
     return { success: false, error: "Σφάλμα κατά τη μετακίνηση του ραντεβού." };
   }
 

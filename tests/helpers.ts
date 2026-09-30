@@ -6,13 +6,17 @@ type Row = Record<string, unknown>;
 export interface FakeDbOptions {
   // Makes every read of a table fail with this error code.
   errors?: Record<string, string>;
+  // Makes inserts into a table fail with this error code.
+  insertErrors?: Record<string, string>;
 }
 
 export function makeDb(tables: Record<string, Row[]>, options: FakeDbOptions = {}) {
   const saved: Row[] = [];
+  let nextId = 1;
 
   return {
     saved,
+    tables,
     from(table: string) {
       let rows = [...(tables[table] ?? [])];
       let single = false;
@@ -20,6 +24,7 @@ export function makeDb(tables: Record<string, Row[]>, options: FakeDbOptions = {
       let orderKey: string | null = null;
       let ascending = true;
       let range: [number, number] | null = null;
+      let updateValues: Row | null = null;
 
       const builder: Record<string, unknown> = {
         select: () => builder,
@@ -34,6 +39,26 @@ export function makeDb(tables: Record<string, Row[]>, options: FakeDbOptions = {
         lte: (key: string, value: string) => {
           rows = rows.filter((r) => (r[key] as string) <= value);
           return builder;
+        },
+        lt: (key: string, value: string) => {
+          rows = rows.filter((r) => (r[key] as string) < value);
+          return builder;
+        },
+        // .not("column", "is", null): keep rows where the column has a value.
+        not: (key: string) => {
+          rows = rows.filter((r) => r[key] !== null && r[key] !== undefined);
+          return builder;
+        },
+        update: (values: Row) => {
+          updateValues = values;
+          return builder;
+        },
+        insert: (payload: Row | Row[]) => {
+          const code = options.insertErrors?.[table];
+          if (code) return Promise.resolve({ error: { code, message: "boom" } });
+          const list = Array.isArray(payload) ? payload : [payload];
+          tables[table] = [...(tables[table] ?? []), ...list.map((r) => ({ id: nextId++, ...r }))];
+          return Promise.resolve({ error: null });
         },
         order: (key: string, opts?: { ascending?: boolean }) => {
           orderKey = key;
@@ -59,6 +84,10 @@ export function makeDb(tables: Record<string, Row[]>, options: FakeDbOptions = {
         then: (resolve: (value: unknown) => void) => {
           const code = options.errors?.[table];
           if (code) return resolve({ data: null, error: { code, message: "boom" } });
+          if (updateValues) {
+            rows.forEach((r) => Object.assign(r, updateValues));
+            return resolve({ data: null, error: null });
+          }
           if (orderKey && rows.length && orderKey in rows[0]) {
             rows.sort((a, b) => (ascending ? 1 : -1) * String(a[orderKey!]).localeCompare(String(b[orderKey!])));
           }

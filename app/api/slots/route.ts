@@ -4,6 +4,8 @@ import { computeAvailableSlots } from "@/lib/slots";
 import { isValidDateString } from "@/lib/validation";
 import { todayAthens } from "@/lib/time";
 import { getClientIp, slotErrorResponse } from "@/lib/http";
+import { logError } from "@/lib/errorLog";
+import { after } from "next/server";
 import { lastBookableDate } from "@/lib/booking";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
@@ -34,6 +36,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (rateLimitError) {
+    after(() => logError("api/slots", rateLimitError));
     return NextResponse.json({ error: "Σφάλμα φόρτωσης διαθέσιμων ωρών." }, { status: 500 });
   }
 
@@ -46,7 +49,7 @@ export async function GET(request: NextRequest) {
 
   const result = await computeAvailableSlots(supabase, serviceId, date);
 
-  if ("error" in result) return slotErrorResponse(result.error);
+  if ("error" in result) return slotErrorResponse(result.error, "api/slots");
 
   return NextResponse.json({ slots: result.slots });
 }

@@ -180,3 +180,38 @@ test("a service id that isn't even a valid id is 'not found', not a server fault
   const result = await computeAvailableSlots(makeDb(base, { errors: { services: "22P02" } }), "abc", TUE, { now: NOW });
   assert.deepEqual(result, { error: "service_not_found" });
 });
+
+test("per-day counts: closed days are not open, a full day is open with 0, others show how many are free", async () => {
+  const db = makeDb({
+    ...base,
+    availability_rules: [rule(2, "10:00", "12:00"), rule(3, "10:00", "12:00"), rule(4, "10:00", "12:00")], // Tue, Wed, Thu
+    blocked_slots: [blocked("2026-10-07")], // Wed 7th: closed by an all-day block (vacation)
+    appointments: [appointment("2026-10-06", "10:00", "10:40"), appointment("2026-10-06", "10:40", "11:20"), appointment("2026-10-06", "11:20", "12:00")], // Tue 6th full
+  });
+  const result = await computeAvailableDates(db, "svc", "2026-10-05", "2026-10-09", { now: NOW });
+  assert.ok("days" in result);
+  assert.deepEqual(result.days["2026-10-05"], { open: false, count: 0 }); // Monday: no hours
+  assert.deepEqual(result.days["2026-10-06"], { open: true, count: 0 }); // Tuesday: open but full
+  assert.deepEqual(result.days["2026-10-07"], { open: false, count: 0 }); // Wednesday: blocked all day
+  assert.deepEqual(result.days["2026-10-08"], { open: true, count: 3 }); // Thursday: 10:00, 10:40, 11:20
+  assert.deepEqual(result.days["2026-10-09"], { open: false, count: 0 }); // Friday: no hours
+  assert.deepEqual(result.dates, ["2026-10-08"]);
+});
+
+test("a partial closure leaves the day open, with only the times that remain counted", async () => {
+  const db = makeDb({ ...base, blocked_slots: [blocked(TUE, "12:00", "23:59")] });
+  const result = await computeAvailableDates(db, "svc", TUE, TUE, { now: NOW });
+  assert.ok("days" in result);
+  assert.deepEqual(result.days[TUE], { open: true, count: 3 }); // 10:00, 10:40, 11:20 before the closure
+});
+
+test("per-day counts equal the length of each day's slot list", async () => {
+  const db = makeDb({ ...base, availability_rules: [rule(2, "10:00", "14:00"), rule(4, "12:00", "16:00")], appointments: [appointment("2026-10-06", "11:00", "11:40")], recurring_customers: [regular({ start_time: "12:00:00" })] });
+  const range = await computeAvailableDates(db, "svc", "2026-10-01", "2026-10-21", { now: NOW });
+  assert.ok("days" in range);
+  for (const [date, info] of Object.entries(range.days)) {
+    const list = await computeAvailableSlots(db, "svc", date, { now: NOW });
+    assert.ok("slots" in list);
+    assert.equal(info.count, list.slots.length, date);
+  }
+});

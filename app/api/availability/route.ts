@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableDates } from "@/lib/slots";
 import { getClientIp, slotErrorResponse } from "@/lib/http";
+import { logError } from "@/lib/errorLog";
+import { after } from "next/server";
 import { lastBookableDate } from "@/lib/booking";
 import { todayAthens } from "@/lib/time";
 
@@ -26,6 +28,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (rateLimitError) {
+    after(() => logError("api/availability", rateLimitError));
     return NextResponse.json({ error: "Σφάλμα φόρτωσης διαθέσιμων ημερών." }, { status: 500 });
   }
 
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
   const today = todayAthens();
   const result = await computeAvailableDates(supabase, serviceId, today, lastBookableDate(today));
 
-  if ("error" in result) return slotErrorResponse(result.error);
+  if ("error" in result) return slotErrorResponse(result.error, "api/availability");
 
-  return NextResponse.json({ dates: result.dates });
+  return NextResponse.json({ dates: result.dates, days: result.days });
 }

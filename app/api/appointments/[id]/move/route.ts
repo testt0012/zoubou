@@ -4,6 +4,7 @@ import { computeAvailableSlots } from "@/lib/slots";
 import { loadOwnAppointment, publicView } from "@/lib/customerAppointment";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { slotErrorResponse } from "@/lib/http";
+import { logError } from "@/lib/errorLog";
 import { notifyAdmins } from "@/lib/push/server";
 import { CHANGE_DEADLINE_HOURS, lastBookableDate } from "@/lib/booking";
 import { isValidDateString, isValidTimeString } from "@/lib/validation";
@@ -55,7 +56,10 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/appoint
   }
 
   const limit = await checkRateLimit(supabase, request, "booking");
-  if (limit === "error") return NextResponse.json({ error: "Σφάλμα κατά τη μετακίνηση του ραντεβού." }, { status: 500 });
+  if (limit === "error") {
+    after(() => logError("api/appointments/move", "rate limit check failed"));
+    return NextResponse.json({ error: "Σφάλμα κατά τη μετακίνηση του ραντεβού." }, { status: 500 });
+  }
   if (limit === "limited") {
     return NextResponse.json({ error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." }, { status: 429 });
   }
@@ -63,7 +67,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/appoint
   const result = await computeAvailableSlots(supabase, appointment.serviceId, date, {
     excludeAppointmentId: appointment.id,
   });
-  if ("error" in result) return slotErrorResponse(result.error);
+  if ("error" in result) return slotErrorResponse(result.error, "api/appointments/move");
 
   if (!result.slots.includes(startTime)) {
     return NextResponse.json(
@@ -86,6 +90,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/appoint
         { status: 409 }
       );
     }
+    after(() => logError("api/appointments/move", error));
     return NextResponse.json({ error: "Σφάλμα κατά τη μετακίνηση του ραντεβού." }, { status: 500 });
   }
 

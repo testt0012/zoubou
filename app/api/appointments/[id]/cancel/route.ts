@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadOwnAppointment } from "@/lib/customerAppointment";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { notifyAdmins } from "@/lib/push/server";
+import { logError } from "@/lib/errorLog";
 import { CHANGE_DEADLINE_HOURS } from "@/lib/booking";
 import { formatDateLong } from "@/lib/time";
 
@@ -25,7 +26,10 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/appoint
   }
 
   const limit = await checkRateLimit(supabase, request, "booking");
-  if (limit === "error") return NextResponse.json({ error: "Σφάλμα κατά την ακύρωση." }, { status: 500 });
+  if (limit === "error") {
+    after(() => logError("api/appointments/cancel", "rate limit check failed"));
+    return NextResponse.json({ error: "Σφάλμα κατά την ακύρωση." }, { status: 500 });
+  }
   if (limit === "limited") {
     return NextResponse.json({ error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." }, { status: 429 });
   }
@@ -35,7 +39,10 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/appoint
     .update({ status: "cancelled" })
     .eq("id", appointment.id)
     .eq("status", "confirmed");
-  if (error) return NextResponse.json({ error: "Σφάλμα κατά την ακύρωση." }, { status: 500 });
+  if (error) {
+    after(() => logError("api/appointments/cancel", error));
+    return NextResponse.json({ error: "Σφάλμα κατά την ακύρωση." }, { status: 500 });
+  }
 
   after(() => {
     notifyAdmins(supabase, {

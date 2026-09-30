@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Calendar from "@/components/Calendar";
+import WeekPicker from "@/components/WeekPicker";
 import { formatDateLong, todayAthens } from "@/lib/time";
 import { lastBookableDate, MAX_ADVANCE_DAYS } from "@/lib/booking";
 import { isPushSupported, subscribeToPush } from "@/lib/push/client";
@@ -69,6 +69,10 @@ export default function BookingWizard() {
   // so the calendar can grey out the rest. "failed" leaves every day within
   // the booking window pickable rather than blocking the flow.
   const [availableDates, setAvailableDates] = useState<Set<string> | null>(null);
+  // For every day in the booking window: is the shop open, and how many free times.
+  const [dayInfo, setDayInfo] = useState<Record<string, { open: boolean; count: number }> | null>(null);
+  // How many free times the strip says the chosen day has (undefined until known).
+  const selectedCount = dayInfo?.[selectedDate]?.open ? dayInfo[selectedDate].count : dayInfo?.[selectedDate] ? 0 : undefined;
   const [datesState, setDatesState] = useState<"loading" | "ready" | "failed">("loading");
   const availabilityFor = useRef<string | null>(null);
 
@@ -143,6 +147,7 @@ export default function BookingWizard() {
       if (availabilityFor.current !== serviceId) return;
       setDatesState("loading");
       setAvailableDates(null);
+      setDayInfo(null);
     });
 
     fetch(`/api/availability?serviceId=${serviceId}`)
@@ -152,6 +157,7 @@ export default function BookingWizard() {
         if (data.error || !Array.isArray(data.dates)) throw new Error("availability");
         const dates = new Set<string>(data.dates);
         setAvailableDates(dates);
+        setDayInfo(data.days ?? null);
         setDatesState("ready");
         // Land on the first day that can actually be booked.
         setSelectedDate((current) => (dates.has(current) || dates.size === 0 ? current : data.dates[0]));
@@ -167,6 +173,17 @@ export default function BookingWizard() {
     // Wait for the calendar's day list first, so the flow doesn't fetch
     // times for a day it's about to move off (or one that has none).
     if (datesState === "loading") return;
+    // A day the shop is closed or that has no free time left has nothing to
+    // fetch: the strip already says so.
+    if (selectedCount === 0) {
+      Promise.resolve().then(() => {
+        setSlots([]);
+        setSlotsError(null);
+        setLoadingSlots(false);
+        setSelectedSlot(null);
+      });
+      return;
+    }
     if (availableDates && !availableDates.has(selectedDate)) return;
     let cancelled = false;
 
@@ -182,7 +199,16 @@ export default function BookingWizard() {
       .then((data) => {
         if (cancelled) return;
         if (data.error) setSlotsError(data.error);
-        else setSlots(data.slots ?? []);
+        else {
+          const list: string[] = data.slots ?? [];
+          setSlots(list);
+          // The day's number on the strip follows what was really listed.
+          setDayInfo((prev) =>
+            prev && prev[selectedDate] && prev[selectedDate].count !== list.length
+              ? { ...prev, [selectedDate]: { ...prev[selectedDate], count: list.length } }
+              : prev
+          );
+        }
       })
       .catch(() => {
         if (!cancelled) setSlotsError("Σφάλμα φόρτωσης διαθέσιμων ωρών.");
@@ -194,7 +220,7 @@ export default function BookingWizard() {
     return () => {
       cancelled = true;
     };
-  }, [step, selectedService, selectedDate, datesState, availableDates]);
+  }, [step, selectedService, selectedDate, datesState, availableDates, selectedCount]);
 
   function startBooking() {
     availabilityFor.current = null;
@@ -396,12 +422,14 @@ export default function BookingWizard() {
           </p>
 
           <div className={`mb-4 transition-opacity ${datesState === "loading" ? "opacity-50 pointer-events-none" : ""}`}>
-            <Calendar
-              selectedDate={selectedDate}
+            <WeekPicker
+              value={selectedDate}
+              onChange={setSelectedDate}
               minDate={today}
               maxDate={lastBookableDate(today)}
               availableDates={availableDates}
-              onSelect={setSelectedDate}
+              dayInfo={dayInfo}
+              hideLabel={datesState === "ready" && availableDates?.size === 0}
             />
           </div>
 
@@ -410,7 +438,8 @@ export default function BookingWizard() {
               Δεν υπάρχουν διαθέσιμες ημέρες τις επόμενες {MAX_ADVANCE_DAYS / 7} εβδομάδες.
             </p>
           ) : (
-            <p className="text-sm font-medium mb-2">{formatDateLong(selectedDate)}</p>
+            // Without the day strip's own count (older answer / still loading) fall back to the plain date.
+            !dayInfo && <p className="text-sm font-medium mb-2">{formatDateLong(selectedDate)}</p>
           )}
 
           {loadingSlots && <p className="text-neutral-500 text-sm">Φόρτωση ωρών…</p>}
