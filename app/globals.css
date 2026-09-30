@@ -274,6 +274,17 @@ textarea {
   .customer-dark .border-red-200 {
     border-color: #7f1d1d;
   }
+  /* The pale pink panel (booking summary, success tick) and the purple text
+     (links, outline buttons) need to work on black. */
+  .customer-dark .bg-brand-pink-light {
+    background-color: #2b1233;
+  }
+  .customer-dark .text-brand-purple {
+    color: #b9a1f5;
+  }
+  .customer-dark .border-brand-purple.text-brand-purple {
+    border-color: #b9a1f5;
+  }
   .customer-dark .bg-red-50 {
     background-color: #2a1215;
   }
