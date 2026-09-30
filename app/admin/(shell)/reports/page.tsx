@@ -11,7 +11,6 @@ import { createClient } from "@/lib/supabase/client";
 import {
   addDays,
   eachDate,
-  formatDateLong,
   formatDateShort,
   startOfWeek,
   todayAthens,
@@ -164,6 +163,7 @@ export default function AdminReportsPage() {
       }
     });
   }, []);
+  const [customOpen, setCustomOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [report, setReport] = useState<RangeReport | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -284,19 +284,17 @@ export default function AdminReportsPage() {
   }
 
   const quickButtonClass = (key: string) =>
-    `h-12 rounded-lg border font-medium disabled:opacity-60 ${
+    `h-10 rounded-lg border text-sm font-medium disabled:opacity-60 ${
       activeKey === key ? "border-brand-purple bg-brand-purple text-white" : "border-neutral-300 bg-white text-neutral-700"
     }`;
 
   return (
     <SlideTransition>
-      <h1 className="text-lg font-semibold mb-6">Αναφορές</h1>
+      <h1 className="text-lg font-semibold mb-4">Αναφορές</h1>
 
-      <div className="flex flex-col gap-8">
-        <section>
-          <h2 className="text-base font-semibold mb-4">Πληρότητα εβδομάδας</h2>
-
-          <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col gap-4">
+        <section className="border border-neutral-200 rounded-2xl p-3">
+          <div className="flex items-center justify-between mb-2">
             <Link
               href={`/admin/reports?calDate=${addDays(calDate, -7)}`}
               className="w-10 h-10 rounded-full flex items-center justify-center text-xl text-neutral-500 hover:bg-neutral-100 shrink-0"
@@ -304,10 +302,13 @@ export default function AdminReportsPage() {
             >
               ‹
             </Link>
-            <div className="text-sm font-medium text-center">
-              {formatDateShort(rangeStart)} – {formatDateShort(rangeEnd)}
+            <div className="text-center">
+              <div className="text-xs text-neutral-500">Πληρότητα εβδομάδας</div>
+              <div className="text-sm font-medium">
+                {formatDateShort(rangeStart)} – {formatDateShort(rangeEnd)}
+              </div>
               {(today < rangeStart || today > rangeEnd) && (
-                <Link href="/admin/reports" className="block text-xs text-brand-purple mt-0.5">
+                <Link href="/admin/reports" className="block text-xs text-brand-purple">
                   Σήμερα
                 </Link>
               )}
@@ -329,7 +330,7 @@ export default function AdminReportsPage() {
               return (
                 <div
                   key={d}
-                  className={`rounded-lg border px-1 py-2 flex flex-col items-center gap-1 ${
+                  className={`rounded-lg border px-1 py-1.5 flex flex-col items-center ${
                     d === today ? "border-brand-purple" : "border-neutral-200"
                   }`}
                 >
@@ -344,80 +345,95 @@ export default function AdminReportsPage() {
           </div>
         </section>
 
-        <section>
-          <h2 className="text-base font-semibold mb-3">Ποσοστό πληρότητας</h2>
-
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <button type="button" onClick={runPreviousWeek} disabled={reportLoading} className={quickButtonClass("week")}>
-              Προηγ. εβδομάδα
-            </button>
-            <button type="button" onClick={runPreviousMonth} disabled={reportLoading} className={quickButtonClass("month")}>
-              Προηγ. μήνας
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <label htmlFor="history-months" className="text-sm text-neutral-500">
-              Ανά ημέρα, για τους τελευταίους
-            </label>
-            <select
-              id="history-months"
-              value={historyMonths}
-              onChange={(e) => changeHistoryMonths(Number(e.target.value))}
-              disabled={reportLoading}
-              className="h-12 w-36 border border-neutral-300 rounded-lg px-3 bg-white text-base text-neutral-900 disabled:opacity-60"
-            >
-              {HISTORY_MONTH_CHOICES.map((m) => (
-                <option key={m} value={m}>
-                  {monthsLabel(m)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {WEEKDAYS.map((weekday, i) => (
-              <button
-                type="button"
-                key={weekday}
-                onClick={() => runWeekday(weekday)}
-                disabled={reportLoading}
-                aria-label={weekdayLabel(weekday)}
-                className={quickButtonClass(`weekday-${weekday}`)}
-              >
-                {SHORT_WEEKDAYS[i]}
+        <section className="border border-neutral-200 rounded-2xl p-3 flex flex-col gap-3">
+          <div>
+            <div className="text-xs text-neutral-500 mb-1.5">Περίοδος</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={runPreviousWeek} disabled={reportLoading} className={quickButtonClass("week")}>
+                Προηγ. εβδομάδα
               </button>
-            ))}
+              <button type="button" onClick={runPreviousMonth} disabled={reportLoading} className={quickButtonClass("month")}>
+                Προηγ. μήνας
+              </button>
+            </div>
           </div>
 
-          <div className="text-sm text-neutral-500 mb-1">Δικό σου διάστημα</div>
-          <form onSubmit={handleReportSubmit} className="grid grid-cols-2 gap-2">
-            <DatePicker
-              title="Από"
-              value={reportFrom}
-              onChange={setReportFrom}
-              className="w-full min-w-0 h-12 border border-neutral-300 rounded-lg px-3 bg-white"
-            />
-            <DatePicker
-              title="Έως"
-              value={reportTo}
-              minDate={reportFrom || undefined}
-              onChange={setReportTo}
-              className="w-full min-w-0 h-12 border border-neutral-300 rounded-lg px-3 bg-white"
-            />
-            <button
-              type="submit"
-              disabled={reportLoading || !reportFrom || !reportTo}
-              className={`col-span-2 ${quickButtonClass("custom")}`}
-            >
-              Υπολογισμός
-            </button>
-          </form>
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-1.5">
+              <label htmlFor="history-months" className="text-xs text-neutral-500">
+                Ανά ημέρα · τελευταίοι
+              </label>
+              <select
+                id="history-months"
+                value={historyMonths}
+                onChange={(e) => changeHistoryMonths(Number(e.target.value))}
+                disabled={reportLoading}
+                className="h-9 w-28 border border-neutral-300 rounded-lg px-2 bg-white text-sm text-neutral-900 disabled:opacity-60"
+              >
+                {HISTORY_MONTH_CHOICES.map((m) => (
+                  <option key={m} value={m}>
+                    {monthsLabel(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {WEEKDAYS.map((weekday, i) => (
+                <button
+                  type="button"
+                  key={weekday}
+                  onClick={() => runWeekday(weekday)}
+                  disabled={reportLoading}
+                  aria-label={weekdayLabel(weekday)}
+                  className={quickButtonClass(`weekday-${weekday}`)}
+                >
+                  {SHORT_WEEKDAYS[i]}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {reportLoading && <p className="text-neutral-500 text-sm mt-4">Υπολογισμός…</p>}
-          {reportError && <p className="text-red-600 text-sm mt-4">{reportError}</p>}
+          <div>
+            <button
+              type="button"
+              onClick={() => setCustomOpen((open) => !open)}
+              aria-expanded={customOpen}
+              className="flex w-full items-center justify-between text-xs text-neutral-500 h-8"
+            >
+              <span>Δικό σου διάστημα</span>
+              <span aria-hidden="true">{customOpen ? "−" : "+"}</span>
+            </button>
+            {(customOpen || activeKey === "custom") && (
+              <form onSubmit={handleReportSubmit} className="grid grid-cols-2 gap-2 mt-1">
+                <DatePicker
+                  title="Από"
+                  value={reportFrom}
+                  onChange={setReportFrom}
+                  className="w-full min-w-0 h-10 border border-neutral-300 rounded-lg px-3 bg-white text-sm"
+                />
+                <DatePicker
+                  title="Έως"
+                  value={reportTo}
+                  minDate={reportFrom || undefined}
+                  onChange={setReportTo}
+                  className="w-full min-w-0 h-10 border border-neutral-300 rounded-lg px-3 bg-white text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={reportLoading || !reportFrom || !reportTo}
+                  className={`col-span-2 ${quickButtonClass("custom")}`}
+                >
+                  Υπολογισμός
+                </button>
+              </form>
+            )}
+          </div>
+
+          {reportLoading && <p className="text-neutral-500 text-sm">Υπολογισμός…</p>}
+          {reportError && <p className="text-red-600 text-sm">{reportError}</p>}
 
           {report && (
-            <div className="mt-4 border border-neutral-200 rounded-xl px-4 py-4 flex items-center gap-4">
+            <div className="rounded-xl bg-neutral-50 px-3 py-3 flex items-center gap-3">
               <div className="text-3xl font-bold text-brand-purple shrink-0">
                 {report.noData || report.workingHours === 0 ? "—" : `${report.percent}%`}
               </div>
@@ -434,7 +450,7 @@ export default function AdminReportsPage() {
                   `${report.bookedHours} ώρες κλεισμένες από ${report.workingHours} ώρες λειτουργίας`
                 )}
                 <br />
-                {formatDateLong(report.from)} – {formatDateLong(report.to)}
+                {formatDateShort(report.from)} – {formatDateShort(report.to)}
                 {!report.noData && (
                   <>
                     {" "}

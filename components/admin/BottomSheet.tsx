@@ -29,7 +29,7 @@ export default function BottomSheet({ title, onClose, onDone, children }: Props)
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="app-dark fixed inset-0 z-50 flex items-end justify-center">
       <div className="absolute inset-0 bg-black/40 sheet-fade" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"

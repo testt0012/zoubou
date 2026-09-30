@@ -253,8 +253,8 @@ textarea {
   }
 }
 
-/* The customer-facing screens in a dark theme (see CustomerShell); the admin
-   keeps the light colours above. Tailwind's neutral greys are variables, so
+/* The dark theme, following the phone's setting: the customer screens
+   (CustomerShell), the admin and its sheets all carry .app-dark. Tailwind's neutral greys are variables, so
    flipping them here turns every text-neutral-* / border-neutral-* /
    bg-neutral-* inside the scope; white backgrounds are flipped explicitly
    (text-white, used on the purple buttons, stays white). */
@@ -262,7 +262,7 @@ textarea {
 .splash-themed { background: #fff; }
 
 @media (prefers-color-scheme: dark) {
-  .customer-dark {
+  .app-dark {
     color-scheme: dark;
     color: #f4f4f5;
     --color-neutral-50: #17171c;
@@ -271,37 +271,42 @@ textarea {
     --color-neutral-300: #454550;
     --color-neutral-400: #7d7d8a;
     --color-neutral-500: #a3a3b0;
+    --color-neutral-600: #bcbcc8;
     --color-neutral-700: #d4d4dc;
     --color-neutral-800: #e8e8ee;
     --color-neutral-900: #f4f4f5;
     --color-red-600: #f87171;
     --color-red-200: #7f1d1d;
+    --color-red-300: #9b2c2c;
+    --color-red-700: #fca5a5;
+    --color-green-700: #4ade80;
   }
-  .customer-dark .bg-white {
+  .app-dark .bg-white {
     background-color: #000;
     box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 10px 30px rgb(0 0 0 / 0.5);
   }
-  .customer-dark .border-red-200 {
+  .app-dark .border-red-200 {
     border-color: #7f1d1d;
   }
   /* The pale pink panel (booking summary, success tick) and the purple text
      (links, outline buttons) need to work on black. */
-  .customer-dark .bg-brand-pink-light {
+  .app-dark .bg-brand-pink-light {
     background-color: #2b1233;
   }
-  .customer-dark .text-brand-purple {
+  .app-dark .text-brand-purple {
     color: #b9a1f5;
   }
-  .customer-dark .border-brand-purple.text-brand-purple {
+  .app-dark .border-brand-purple.text-brand-purple {
     border-color: #b9a1f5;
   }
-  .customer-dark .bg-red-50 {
+  .app-dark .bg-red-50 {
     background-color: #2a1215;
   }
 
   .logo-light { display: none; }
   .logo-dark { display: block; }
   .splash-themed { background: #000; }
-  .splash-scissors [stroke="#262626"] { stroke: #e5e5e5; }
+  .splash-scissors [stroke="#262626"],
+  .app-dark [stroke="#262626"] { stroke: #e5e5e5; }
 }
 

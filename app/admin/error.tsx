@@ -18,7 +18,7 @@ export default function AdminError({ error, reset }: { error: Error & { digest?:
   }, [error]);
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-8 my-6 bg-white rounded-2xl shadow-lg shadow-black/20 text-center">
+    <div className="app-dark w-full max-w-md mx-auto px-4 py-8 my-6 bg-white rounded-2xl shadow-lg shadow-black/20 text-center">
       <h1 className="text-lg font-semibold mb-2">Κάτι πήγε στραβά</h1>
       <p className="text-sm text-neutral-500 mb-6">
         Παρουσιάστηκε ένα απρόσμενο πρόβλημα στην οθόνη. Δοκιμάστε ξανά ή γυρίστε στα ραντεβού.

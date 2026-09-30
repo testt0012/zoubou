@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import ThemedLogo from "@/components/ThemedLogo";
-import { usePathname } from "next/navigation";
 import ScissorsLoader from "@/components/ScissorsLoader";
 
 // How long the screen stays at least, so the animation is seen rather than
@@ -17,8 +15,6 @@ const FADE_MS = 350;
 // removed once the app has started. Only on a full page load: moving between
 // screens inside the app doesn't bring it back.
 export default function SplashScreen() {
-  // Customer screens follow the phone's light/dark setting, the admin is light.
-  const customer = !usePathname().startsWith("/admin");
   const [phase, setPhase] = useState<"shown" | "fading" | "gone">("shown");
 
   useEffect(() => {
@@ -43,18 +39,12 @@ export default function SplashScreen() {
       aria-hidden={phase === "fading"}
       data-splash
       style={{ transitionDuration: `${FADE_MS}ms` }}
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 px-8 ${customer ? "splash-themed" : "bg-white"} transition-opacity ${
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 px-8 splash-themed transition-opacity ${
         phase === "fading" ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
-      {customer ? (
-        <ThemedLogo className="w-full max-w-[420px] h-auto" />
-      ) : (
-        <Image src="/logo-720.webp" unoptimized alt="Zoubou" width={900} height={300} priority className="w-full max-w-[420px] h-auto" />
-      )}
-      <ScissorsLoader
-        className={`w-44 h-auto ${customer ? "splash-scissors" : ""}`}
-      />
+      <ThemedLogo className="w-full max-w-[420px] h-auto" />
+      <ScissorsLoader className="w-44 h-auto splash-scissors" />
       <span className="sr-only">Φόρτωση…</span>
     </div>
   );

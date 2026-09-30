@@ -50,7 +50,6 @@ function BlockedSlotList({ slots, detail }: { slots: BlockedSlot[]; detail?: (b:
           </form>
         </div>
       ))}
-      {slots.length === 0 && <p className="text-sm text-neutral-400">Δεν υπάρχουν καταχωρήσεις.</p>}
     </div>
   );
 }

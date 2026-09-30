@@ -9,7 +9,7 @@ import { ADMIN_NAV } from "@/components/admin/adminNav";
 // follows the finger from tab to tab and the tab under it opens when it is
 // let go — the way Instagram's bottom bar works. A plain tap still just opens
 // the tab.
-const HOLD_MS = 250;
+const HOLD_MS = 100;
 // A finger that has moved this far before the hold is up is doing something
 // else (a scroll, a swipe that started on the bar) — no slide starts.
 const MOVE_TOLERANCE_PX = 10;

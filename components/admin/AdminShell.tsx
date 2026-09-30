@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
+import ThemedLogo from "@/components/ThemedLogo";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AccountSheet from "@/components/admin/AccountSheet";
@@ -77,19 +77,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="app-dark flex-1 flex flex-col">
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-6 pb-28">
         <div
           className="bg-white rounded-2xl shadow-lg shadow-black/20 px-4 py-6 sm:px-6"
         >
           <div className="flex items-center justify-between mb-6">
-            <Image
-              src="/logo-720.webp" unoptimized
-              alt="Zoubou"
-              width={900}
-              height={300}
-              className="h-12 w-auto"
-            />
+            <ThemedLogo className="h-12 w-auto" />
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setAccountOpen(true)}
