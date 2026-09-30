@@ -80,19 +80,20 @@ export async function POST(request: NextRequest) {
   // Only well-formed booking attempts consume the rate limit — a typo in
   // the phone number shouldn't burn one of the user's few retries. The
   // check-and-record happens atomically in the database (see migration
-  // 0003) to avoid a check-then-insert race under concurrent requests.
-  const { data: allowed, error: rateLimitError } = await supabase.rpc(
-    "record_booking_attempt",
-    {
+  // 0003) to avoid a check-then-insert race under concurrent requests. It
+  // runs alongside the free-time check (they don't depend on each other),
+  // but nothing is written until both have answered.
+  const [{ data: allowed, error: rateLimitError }, result] = await Promise.all([
+    supabase.rpc("record_booking_attempt", {
       p_ip: ip,
       p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
       p_max_attempts: RATE_LIMIT_MAX_ATTEMPTS,
-    }
-  );
+    }),
+    computeAvailableSlots(supabase, serviceId, date),
+  ]);
 
   if (rateLimitError) {
     after(() => logError("api/book", rateLimitError));
-    after(() => logError("api/book", insertError));
     return NextResponse.json(
       { error: "Σφάλμα κατά τη δημιουργία του ραντεβού." },
       { status: 500 }
@@ -106,7 +107,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = await computeAvailableSlots(supabase, serviceId, date);
   if ("error" in result) return slotErrorResponse(result.error, "api/book");
 
   if (!result.slots.includes(startTime)) {
@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    after(() => logError("api/book", insertError));
     return NextResponse.json(
       { error: "Σφάλμα κατά τη δημιουργία του ραντεβού." },
       { status: 500 }

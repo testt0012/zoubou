@@ -215,3 +215,21 @@ test("per-day counts equal the length of each day's slot list", async () => {
     assert.equal(info.count, list.slots.length, date);
   }
 });
+
+test("the first free day's times come with the day list, and match that day's own slot list", async () => {
+  const db = makeDb({ ...base, appointments: [appointment(TUE, "10:00", "10:40")] });
+  const result = await computeAvailableDates(db, "svc", "2026-10-01", "2026-10-14", { now: NOW });
+  assert.ok("firstDay" in result);
+  assert.equal(result.firstDay?.date, TUE);
+  assert.deepEqual(result.firstDay?.slots, ["10:40", "11:20", "12:00", "12:40", "13:20"]);
+  const direct = await computeAvailableSlots(db, "svc", TUE, { now: NOW });
+  assert.ok("slots" in direct);
+  assert.deepEqual(result.firstDay?.slots, direct.slots);
+});
+
+test("no free day in the range means no first day", async () => {
+  const closed = makeDb({ ...base, availability_rules: [] });
+  const result = await computeAvailableDates(closed, "svc", "2026-10-01", "2026-10-14", { now: NOW });
+  assert.ok("firstDay" in result);
+  assert.equal(result.firstDay, null);
+});

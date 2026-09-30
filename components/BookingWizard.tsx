@@ -9,6 +9,13 @@ import { lastBookableDate, MAX_ADVANCE_DAYS } from "@/lib/booking";
 import { isPushSupported, subscribeToPush } from "@/lib/push/client";
 
 const ADMIN_HOLD_MS = 3000;
+// How long a day list fetched in the background stays good before the
+// booking screen asks again.
+const AVAILABILITY_FRESH_MS = 60_000;
+
+function isStale(since: number): boolean {
+  return Date.now() - since > AVAILABILITY_FRESH_MS;
+}
 
 interface Service {
   id: string;
@@ -28,12 +35,16 @@ interface ConfirmedAppointment {
   lastName: string;
 }
 
-export default function BookingWizard() {
+export default function BookingWizard({ initialServices = null }: { initialServices?: Service[] | null }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("intro");
-  const [services, setServices] = useState<Service[] | null>(null);
+  const [services, setServices] = useState<Service[] | null>(initialServices);
   const [servicesError, setServicesError] = useState(false);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  // With a single service there's no real choice to make — it is pre-selected
+  // so the CTA can skip straight to picking a time.
+  const [selectedService, setSelectedService] = useState<Service | null>(
+    initialServices && initialServices.length === 1 ? initialServices[0] : null
+  );
 
   const [logoPressing, setLogoPressing] = useState(false);
   const [enteringAdmin, setEnteringAdmin] = useState(false);
@@ -75,6 +86,10 @@ export default function BookingWizard() {
   const selectedCount = dayInfo?.[selectedDate]?.open ? dayInfo[selectedDate].count : dayInfo?.[selectedDate] ? 0 : undefined;
   const [datesState, setDatesState] = useState<"loading" | "ready" | "failed">("loading");
   const availabilityFor = useRef<string | null>(null);
+  const availabilityAt = useRef(0);
+  // The first free day's times, handed over with the day list, so they can be
+  // shown without a second request.
+  const preloadedSlots = useRef<{ date: string; slots: string[] } | null>(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -121,6 +136,8 @@ export default function BookingWizard() {
   }
 
   useEffect(() => {
+    // Already in the page (see app/page.tsx).
+    if (initialServices) return;
     fetch("/api/services")
       .then((r) => r.json())
       .then((data) => {
@@ -133,15 +150,19 @@ export default function BookingWizard() {
         }
       })
       .catch(() => setServicesError(true));
-  }, []);
+  }, [initialServices]);
 
+  // The day list is fetched as soon as the service is known — already while
+  // the first screen is being read — not only after "Book" is tapped, so by
+  // the time it is tapped the answer is usually waiting.
   useEffect(() => {
-    if (step !== "slot" || !selectedService) return;
+    if (!selectedService) return;
     const serviceId = selectedService.id;
     // Already loaded (or loading) for this service — e.g. coming back from
     // the details form.
     if (availabilityFor.current === serviceId) return;
     availabilityFor.current = serviceId;
+    availabilityAt.current = Date.now();
 
     Promise.resolve().then(() => {
       if (availabilityFor.current !== serviceId) return;
@@ -158,6 +179,7 @@ export default function BookingWizard() {
         const dates = new Set<string>(data.dates);
         setAvailableDates(dates);
         setDayInfo(data.days ?? null);
+        preloadedSlots.current = data.firstDay ?? null;
         setDatesState("ready");
         // Land on the first day that can actually be booked.
         setSelectedDate((current) => (dates.has(current) || dates.size === 0 ? current : data.dates[0]));
@@ -185,6 +207,19 @@ export default function BookingWizard() {
       return;
     }
     if (availableDates && !availableDates.has(selectedDate)) return;
+
+    // The first free day's times came with the day list: nothing to fetch.
+    const preloaded = preloadedSlots.current;
+    if (preloaded && preloaded.date === selectedDate) {
+      preloadedSlots.current = null;
+      Promise.resolve().then(() => {
+        setSlots(preloaded.slots);
+        setSlotsError(null);
+        setLoadingSlots(false);
+        setSelectedSlot(null);
+      });
+      return;
+    }
     let cancelled = false;
 
     Promise.resolve().then(() => {
@@ -222,14 +257,22 @@ export default function BookingWizard() {
     };
   }, [step, selectedService, selectedDate, datesState, availableDates, selectedCount]);
 
+  // A day list fetched a while ago is asked for again; a recent one is used.
+  function refreshAvailabilityIfStale() {
+    if (isStale(availabilityAt.current)) {
+      availabilityFor.current = null;
+      preloadedSlots.current = null;
+    }
+  }
+
   function startBooking() {
-    availabilityFor.current = null;
+    refreshAvailabilityIfStale();
     if (selectedService) setStep("slot");
     else setStep("service");
   }
 
   function chooseService(s: Service) {
-    availabilityFor.current = null;
+    refreshAvailabilityIfStale();
     setSelectedService(s);
     setStep("slot");
   }
@@ -289,6 +332,9 @@ export default function BookingWizard() {
   }
 
   function startOver() {
+    // What was free has changed (this booking took a time): ask again.
+    availabilityFor.current = null;
+    preloadedSlots.current = null;
     setStep("intro");
     // Keep the pre-selection when there's only one service — otherwise the
     // intro CTA would need a redundant "pick a service" step again.
@@ -310,7 +356,7 @@ export default function BookingWizard() {
       {step !== "intro" && (
         <div className="flex justify-center mb-4">
           <Image
-            src="/logo.png"
+            src="/logo-720.webp" unoptimized
             alt="Zoubou"
             width={900}
             height={300}
@@ -334,7 +380,7 @@ export default function BookingWizard() {
             onContextMenu={(e) => e.preventDefault()}
           >
             <Image
-              src="/logo.png"
+              src="/logo-720.webp" unoptimized
               alt="Zoubou"
               width={900}
               height={300}

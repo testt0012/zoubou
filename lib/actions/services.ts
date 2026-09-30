@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/supabase/server";
 
 export async function createService(formData: FormData) {
@@ -21,6 +22,9 @@ export async function createService(formData: FormData) {
     duration_minutes: duration,
     sort_order: (existing?.sort_order ?? 0) + 1,
   });
+
+  // The home page serves a ready-made copy of the services list.
+  revalidatePath("/");
 }
 
 export async function updateService(formData: FormData) {
@@ -35,6 +39,9 @@ export async function updateService(formData: FormData) {
     .from("services")
     .update({ name, duration_minutes: duration })
     .eq("id", id);
+
+  // The home page serves a ready-made copy of the services list.
+  revalidatePath("/");
 }
 
 export async function deleteService(formData: FormData) {
@@ -48,4 +55,7 @@ export async function deleteService(formData: FormData) {
     // the row so their history stays intact, just hide it going forward.
     await supabase.from("services").update({ active: false }).eq("id", id);
   }
+
+  // The home page serves a ready-made copy of the services list.
+  revalidatePath("/");
 }

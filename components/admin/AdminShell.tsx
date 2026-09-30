@@ -122,7 +122,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         >
           <div className="flex items-center justify-between mb-6">
             <Image
-              src="/logo.png"
+              src="/logo-720.webp" unoptimized
               alt="Zoubou"
               width={900}
               height={300}

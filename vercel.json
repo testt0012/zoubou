@@ -8,5 +8,8 @@
       "path": "/api/cron/daily-stats",
       "schedule": "0 1 * * *"
     }
+  ],
+  "regions": [
+    "fra1"
   ]
 }

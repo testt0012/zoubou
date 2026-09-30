@@ -1,12 +1,23 @@
 import "server-only";
-import webpush from "web-push";
+import type webpushType from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+// web-push is sizeable, and most requests never send a notification: load it
+// (and set the keys) the first time one is sent instead of at start-up, so
+// routes that only occasionally notify start faster.
+let webpush: typeof webpushType | null = null;
+async function getWebPush(): Promise<typeof webpushType> {
+  if (!webpush) {
+    const lib = (await import("web-push")).default;
+    lib.setVapidDetails(
+      process.env.VAPID_SUBJECT!,
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+      process.env.VAPID_PRIVATE_KEY!
+    );
+    webpush = lib;
+  }
+  return webpush;
+}
 
 interface PushKeys {
   endpoint: string;
@@ -29,7 +40,7 @@ export async function sendPush(
   payload: PushPayload
 ): Promise<{ ok: boolean; gone: boolean }> {
   try {
-    await webpush.sendNotification(
+    await (await getWebPush()).sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload)
     );

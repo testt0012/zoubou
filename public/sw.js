@@ -1,13 +1,13 @@
 // Minimal service worker: cache the static app shell and provide an offline
 // fallback page for navigations. Booking requires a live network connection
 // and is intentionally NOT cached or supported offline.
-const CACHE_NAME = "zoubou-shell-v3";
+const CACHE_NAME = "zoubou-shell-v4";
 const SHELL_ASSETS = [
   "/manifest.webmanifest",
   "/offline.html",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
-  "/logo.png",
+  "/logo-720.webp",
   "/background.jpg",
 ];
 

@@ -9,6 +9,7 @@ import { todayAthens } from "@/lib/time";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
 const RATE_LIMIT_MAX_ATTEMPTS = 60;
+const CACHE_SHORT = "public, s-maxage=5, stale-while-revalidate=25";
 
 // The days a customer can still book this service on (from today to three
 // weeks ahead, and only those with at least one free time) — the calendar
@@ -21,11 +22,15 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  const { data: allowed, error: rateLimitError } = await supabase.rpc("record_slots_attempt", {
-    p_ip: getClientIp(request),
-    p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
-    p_max_attempts: RATE_LIMIT_MAX_ATTEMPTS,
-  });
+  const today = todayAthens();
+  const [{ data: allowed, error: rateLimitError }, result] = await Promise.all([
+    supabase.rpc("record_slots_attempt", {
+      p_ip: getClientIp(request),
+      p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
+      p_max_attempts: RATE_LIMIT_MAX_ATTEMPTS,
+    }),
+    computeAvailableDates(supabase, serviceId, today, lastBookableDate(today)),
+  ]);
 
   if (rateLimitError) {
     after(() => logError("api/availability", rateLimitError));
@@ -36,10 +41,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." }, { status: 429 });
   }
 
-  const today = todayAthens();
-  const result = await computeAvailableDates(supabase, serviceId, today, lastBookableDate(today));
-
   if ("error" in result) return slotErrorResponse(result.error, "api/availability");
 
-  return NextResponse.json({ dates: result.dates, days: result.days });
+  return NextResponse.json(
+    { dates: result.dates, days: result.days, firstDay: result.firstDay },
+    { headers: { "Cache-Control": CACHE_SHORT } }
+  );
 }

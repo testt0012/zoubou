@@ -19,5 +19,9 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ services: data });
+  return NextResponse.json(
+    { services: data },
+    // Rarely changes; a shared copy for a minute (and a stale one while it refreshes).
+    { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" } }
+  );
 }

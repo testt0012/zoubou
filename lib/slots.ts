@@ -25,6 +25,9 @@ export interface DatesResult {
   dates: string[];
   // Every day in the range: whether the shop is open and how many times are free.
   days: Record<string, DayAvailability>;
+  // The first day with free times and those times, so the booking screen can
+  // show them without a second request.
+  firstDay: { date: string; slots: string[] } | null;
 }
 
 export interface SlotsResult {
@@ -133,19 +136,25 @@ function slotsForDate(
 // A database error must never be read as "nothing booked, nothing blocked" —
 // that would offer taken or closed times. Anything that can't be read makes
 // the whole answer "unavailable" instead.
-async function loadService(supabase: Db, serviceId: string): Promise<number | SlotError> {
-  const { data: service, error } = await supabase
+// Reads the duration out of the service lookup (which runs alongside the
+// other queries, not before them — one database round trip saved per call).
+function serviceDuration(result: {
+  data: { duration_minutes: number } | null;
+  error: { code?: string } | null;
+}): number | SlotError {
+  // 22P02: the id isn't even a valid UUID, so no such service.
+  if (result.error) return result.error.code === "22P02" ? "service_not_found" : "unavailable";
+  if (!result.data) return "service_not_found";
+  return result.data.duration_minutes as number;
+}
+
+const serviceQuery = (supabase: Db, serviceId: string) =>
+  supabase
     .from("services")
     .select("id, duration_minutes, active")
     .eq("id", serviceId)
     .eq("active", true)
     .maybeSingle();
-
-  // 22P02: the id isn't even a valid UUID, so no such service.
-  if (error) return error.code === "22P02" ? "service_not_found" : "unavailable";
-  if (!service) return "service_not_found";
-  return service.duration_minutes as number;
-}
 
 // The table not existing (before migration 0009) just means "no regulars";
 // any other error is passed on as null.
@@ -180,10 +189,8 @@ export async function computeAvailableSlots(
   date: string,
   options: SlotOptions = {}
 ): Promise<SlotsResult | { error: SlotError }> {
-  const duration = await loadService(supabase, serviceId);
-  if (typeof duration !== "number") return { error: duration };
-
-  const [settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
+  const [serviceRes, settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
+    serviceQuery(supabase, serviceId),
     supabase.from("settings").select("*").eq("id", true).maybeSingle(),
     supabase.from("availability_rules").select("weekday, start_time, end_time").eq("weekday", weekdayOf(date)),
     supabase.from("blocked_slots").select("date, start_time, end_time").eq("date", date),
@@ -194,6 +201,9 @@ export async function computeAvailableSlots(
       .eq("status", "confirmed"),
     loadRegulars(supabase, date),
   ]);
+
+  const duration = serviceDuration(serviceRes);
+  if (typeof duration !== "number") return { error: duration };
 
   if (settingsRes.error || rulesRes.error || blockedRes.error || bookedRes.error || visits === null) {
     return { error: "unavailable" };
@@ -228,10 +238,8 @@ export async function computeAvailableDates(
   to: string,
   options: SlotOptions = {}
 ): Promise<DatesResult | { error: SlotError }> {
-  const duration = await loadService(supabase, serviceId);
-  if (typeof duration !== "number") return { error: duration };
-
-  const [settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
+  const [serviceRes, settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
+    serviceQuery(supabase, serviceId),
     supabase.from("settings").select("*").eq("id", true).maybeSingle(),
     supabase.from("availability_rules").select("weekday, start_time, end_time"),
     supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", from).lte("date", to),
@@ -243,6 +251,9 @@ export async function computeAvailableDates(
       .eq("status", "confirmed"),
     loadRegulars(supabase, to),
   ]);
+
+  const duration = serviceDuration(serviceRes);
+  if (typeof duration !== "number") return { error: duration };
 
   if (settingsRes.error || rulesRes.error || blockedRes.error || bookedRes.error || visits === null) {
     return { error: "unavailable" };
@@ -260,8 +271,11 @@ export async function computeAvailableDates(
   const now = options.now ?? athensNow();
   const dates: string[] = [];
   const days: Record<string, DayAvailability> = {};
+  let firstDay: DatesResult["firstDay"] = null;
   for (let date = from; date <= to; date = nextDate(date)) {
-    const count = slotsForDate(inputs, date, now, options.excludeAppointmentId).length;
+    const times = slotsForDate(inputs, date, now, options.excludeAppointmentId);
+    const count = times.length;
+    if (count > 0 && !firstDay) firstDay = { date, slots: times.map(minutesToTime) };
     // "Open" is about the shop's hours, not about what's left: a full day is
     // open with 0 free times, a day with no hours (or closed by a vacation
     // or an all-day closure) is not open at all.
@@ -269,7 +283,7 @@ export async function computeAvailableDates(
     if (count > 0) dates.push(date);
   }
 
-  return { dates, days };
+  return { dates, days, firstDay };
 }
 
 function nextDate(date: string): string {

@@ -87,7 +87,7 @@ export default function AdminLoginPage() {
         </Link>
         <div className="flex justify-center mb-6">
           <Image
-            src="/logo.png"
+            src="/logo-720.webp" unoptimized
             alt="Zoubou"
             width={900}
             height={300}
