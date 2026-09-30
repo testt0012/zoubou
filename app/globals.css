@@ -47,7 +47,7 @@ body {
    without this, that bounce flashes plain white. */
 html,
 .app-background {
-  background: url("/background.jpg") top center / cover no-repeat;
+  background: url("/background.webp") top center / cover no-repeat;
 }
 
 /* On phone-width screens, "cover" crops most of the photo's width down to a

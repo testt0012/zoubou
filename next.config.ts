@@ -45,6 +45,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      // The two big images have fixed, versioned names: keep them for a year
+      // so a returning visitor doesn't even ask again.
+      {
+        source: "/:file(logo-720.webp|background.webp)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       // The admin area, each customer's private appointment page and the API
       // stay out of search results. (robots.txt deliberately doesn't list
       // /admin: that would advertise the hidden entry point.)
