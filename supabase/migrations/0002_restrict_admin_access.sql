@@ -3,7 +3,8 @@
 -- admin tables, a self-registered visitor (using the public anon key, which
 -- is unavoidably exposed in the browser bundle) could otherwise read/write
 -- all bookings and settings. This app has exactly one legitimate admin, so
--- tie the policies to that specific account instead of the whole
+-- tie the policies to that specific account (marked by app_metadata.app_role =
+-- 'admin', set with the service-role key; see migration 0014) instead of the whole
 -- "authenticated" role.
 --
 -- Also go to Authentication > Sign In / Providers > Email in the dashboard
@@ -15,7 +16,7 @@ returns boolean
 language sql
 stable
 as $$
-  select auth.jwt() ->> 'email' = 'admin@zoubou.gr';
+  select coalesce(auth.jwt() -> 'app_metadata' ->> 'app_role', '') = 'admin';
 $$;
 
 drop policy if exists "admin_full_access" on services;

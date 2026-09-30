@@ -121,7 +121,7 @@ export default function Calendar({ selectedDate, minDate, maxDate, availableDate
   }
 
   return (
-    <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} className="touch-pan-y overflow-hidden">
+    <div data-no-swipe onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} className="touch-pan-y overflow-hidden">
       <div className="flex items-center justify-between mb-2">
         <button
           type="button"

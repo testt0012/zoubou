@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { isAdminUser } from "@/lib/auth";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 30000;
@@ -51,7 +52,15 @@ export default function AdminLoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    // Only the admin account gets in: any other account that happens to
+    // exist is signed straight back out and treated like a wrong password.
+    let error = signInError;
+    if (!error && !isAdminUser(data.user)) {
+      await supabase.auth.signOut();
+      error = new Error("not an admin") as typeof signInError;
+    }
 
     if (error) {
       const nextAttempts = failedAttempts + 1;
@@ -73,7 +82,7 @@ export default function AdminLoginPage() {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg shadow-black/20 px-6 py-8">
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-brand-purple mb-4">
+        <Link href="/" className="inline-flex items-center gap-1 h-11 -mt-2 text-sm text-brand-purple mb-2">
           ← Πίσω
         </Link>
         <div className="flex justify-center mb-6">

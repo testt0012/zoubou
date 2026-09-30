@@ -542,6 +542,12 @@ export default function BookingWizard() {
           >
             Προσθήκη στο ημερολόγιο
           </a>
+          <a
+            href={`/a/${confirmed.id}`}
+            className="w-full block text-center border border-neutral-300 text-neutral-700 rounded-md py-3 font-medium mb-3"
+          >
+            Αλλαγή ή ακύρωση ραντεβού
+          </a>
           {(reminderState === "idle" || reminderState === "subscribing") && (
             <button
               onClick={handleEnableReminder}

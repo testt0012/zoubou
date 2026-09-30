@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableSlots } from "@/lib/slots";
 import { isValidDateString } from "@/lib/validation";
 import { todayAthens } from "@/lib/time";
-import { getClientIp } from "@/lib/http";
+import { getClientIp, slotErrorResponse } from "@/lib/http";
 import { lastBookableDate } from "@/lib/booking";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
@@ -46,12 +46,7 @@ export async function GET(request: NextRequest) {
 
   const result = await computeAvailableSlots(supabase, serviceId, date);
 
-  if ("error" in result) {
-    return NextResponse.json(
-      { error: "Η υπηρεσία δεν βρέθηκε." },
-      { status: 404 }
-    );
-  }
+  if ("error" in result) return slotErrorResponse(result.error);
 
   return NextResponse.json({ slots: result.slots });
 }

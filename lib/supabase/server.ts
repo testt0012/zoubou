@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isAdminUser } from "@/lib/auth";
 
 // Server-side Supabase client bound to the current request's cookies.
 // Used in Server Components / Server Actions for the admin area — requests
@@ -40,7 +41,7 @@ export async function requireAdmin() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user || !isAdminUser(user)) {
     redirect("/admin/login");
   }
 

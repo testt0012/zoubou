@@ -20,10 +20,14 @@ export function sanitizeName(raw: string): string | null {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^\d{2}:\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// A real calendar day: "2026-02-30" and "2026-10-00" have the right shape
+// but aren't dates (and would make the database reject the query).
 export function isValidDateString(value: unknown): value is string {
-  return typeof value === "string" && DATE_RE.test(value);
+  if (typeof value !== "string" || !DATE_RE.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 export function isValidTimeString(value: unknown): value is string {

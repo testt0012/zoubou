@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeAvailableDates } from "@/lib/slots";
-import { getClientIp } from "@/lib/http";
+import { getClientIp, slotErrorResponse } from "@/lib/http";
 import { lastBookableDate } from "@/lib/booking";
 import { todayAthens } from "@/lib/time";
 
@@ -36,9 +36,7 @@ export async function GET(request: NextRequest) {
   const today = todayAthens();
   const result = await computeAvailableDates(supabase, serviceId, today, lastBookableDate(today));
 
-  if ("error" in result) {
-    return NextResponse.json({ error: "Η υπηρεσία δεν βρέθηκε." }, { status: 404 });
-  }
+  if ("error" in result) return slotErrorResponse(result.error);
 
   return NextResponse.json({ dates: result.dates });
 }

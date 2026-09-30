@@ -13,11 +13,19 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, any, any>;
 
-export type SlotError = "service_not_found" | "invalid_date";
+export type SlotError = "service_not_found" | "invalid_date" | "unavailable";
 
 export interface SlotsResult {
   slots: string[];
   serviceDurationMinutes: number;
+}
+
+const MISSING_TABLE_CODES = ["42P01", "PGRST205"];
+
+// `now` is only for tests; it defaults to the real Athens clock.
+export interface SlotOptions {
+  excludeAppointmentId?: string;
+  now?: { date: string; minutes: number };
 }
 
 interface WeeklyRule {
@@ -110,7 +118,10 @@ function slotsForDate(
   return Array.from(new Set(results)).sort((a, b) => a - b);
 }
 
-async function loadService(supabase: Db, serviceId: string): Promise<number | null> {
+// A database error must never be read as "nothing booked, nothing blocked" —
+// that would offer taken or closed times. Anything that can't be read makes
+// the whole answer "unavailable" instead.
+async function loadService(supabase: Db, serviceId: string): Promise<number | SlotError> {
   const { data: service, error } = await supabase
     .from("services")
     .select("id, duration_minutes, active")
@@ -118,17 +129,20 @@ async function loadService(supabase: Db, serviceId: string): Promise<number | nu
     .eq("active", true)
     .maybeSingle();
 
-  if (error || !service) return null;
+  // 22P02: the id isn't even a valid UUID, so no such service.
+  if (error) return error.code === "22P02" ? "service_not_found" : "unavailable";
+  if (!service) return "service_not_found";
   return service.duration_minutes as number;
 }
 
-// Errors (e.g. the table not existing before migration 0009) just mean "no
-// regulars".
-async function loadRegulars(supabase: Db, upTo: string): Promise<RecurringVisit[]> {
-  const { data } = await supabase
+// The table not existing (before migration 0009) just means "no regulars";
+// any other error is passed on as null.
+export async function loadRegulars(supabase: Db, upTo: string): Promise<RecurringVisit[] | null> {
+  const { data, error } = await supabase
     .from("recurring_customers")
     .select("*, services(duration_minutes)")
     .lte("start_date", upTo);
+  if (error) return MISSING_TABLE_CODES.includes(error.code ?? "") ? [] : null;
 
   return (data ?? []).map((r) => {
     const joined = r.services as { duration_minutes: number } | { duration_minutes: number }[] | null;
@@ -152,12 +166,12 @@ export async function computeAvailableSlots(
   supabase: Db,
   serviceId: string,
   date: string,
-  options: { excludeAppointmentId?: string } = {}
+  options: SlotOptions = {}
 ): Promise<SlotsResult | { error: SlotError }> {
   const duration = await loadService(supabase, serviceId);
-  if (duration === null) return { error: "service_not_found" };
+  if (typeof duration !== "number") return { error: duration };
 
-  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }, visits] = await Promise.all([
+  const [settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
     supabase.from("settings").select("*").eq("id", true).maybeSingle(),
     supabase.from("availability_rules").select("weekday, start_time, end_time").eq("weekday", weekdayOf(date)),
     supabase.from("blocked_slots").select("date, start_time, end_time").eq("date", date),
@@ -169,17 +183,21 @@ export async function computeAvailableSlots(
     loadRegulars(supabase, date),
   ]);
 
+  if (settingsRes.error || rulesRes.error || blockedRes.error || bookedRes.error || visits === null) {
+    return { error: "unavailable" };
+  }
+
   const slots = slotsForDate(
     {
       duration,
-      buffer: settings?.buffer_minutes ?? 0,
-      rules: rules ?? [],
-      blocked: blocked ?? [],
-      booked: booked ?? [],
+      buffer: settingsRes.data?.buffer_minutes ?? 0,
+      rules: rulesRes.data ?? [],
+      blocked: blockedRes.data ?? [],
+      booked: bookedRes.data ?? [],
       visits,
     },
     date,
-    athensNow(),
+    options.now ?? athensNow(),
     options.excludeAppointmentId
   ).map(minutesToTime);
 
@@ -195,12 +213,13 @@ export async function computeAvailableDates(
   supabase: Db,
   serviceId: string,
   from: string,
-  to: string
+  to: string,
+  options: SlotOptions = {}
 ): Promise<{ dates: string[] } | { error: SlotError }> {
   const duration = await loadService(supabase, serviceId);
-  if (duration === null) return { error: "service_not_found" };
+  if (typeof duration !== "number") return { error: duration };
 
-  const [{ data: settings }, { data: rules }, { data: blocked }, { data: booked }, visits] = await Promise.all([
+  const [settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
     supabase.from("settings").select("*").eq("id", true).maybeSingle(),
     supabase.from("availability_rules").select("weekday, start_time, end_time"),
     supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", from).lte("date", to),
@@ -213,19 +232,23 @@ export async function computeAvailableDates(
     loadRegulars(supabase, to),
   ]);
 
+  if (settingsRes.error || rulesRes.error || blockedRes.error || bookedRes.error || visits === null) {
+    return { error: "unavailable" };
+  }
+
   const inputs: SlotInputs = {
     duration,
-    buffer: settings?.buffer_minutes ?? 0,
-    rules: rules ?? [],
-    blocked: blocked ?? [],
-    booked: booked ?? [],
+    buffer: settingsRes.data?.buffer_minutes ?? 0,
+    rules: rulesRes.data ?? [],
+    blocked: blockedRes.data ?? [],
+    booked: bookedRes.data ?? [],
     visits,
   };
 
-  const now = athensNow();
+  const now = options.now ?? athensNow();
   const dates: string[] = [];
   for (let date = from; date <= to; date = nextDate(date)) {
-    if (slotsForDate(inputs, date, now).length > 0) dates.push(date);
+    if (slotsForDate(inputs, date, now, options.excludeAppointmentId).length > 0) dates.push(date);
   }
 
   return { dates };

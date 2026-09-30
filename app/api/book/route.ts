@@ -9,7 +9,7 @@ import {
 } from "@/lib/validation";
 import { formatDateLong, minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 import { notifyAdmins } from "@/lib/push/server";
-import { getClientIp } from "@/lib/http";
+import { getClientIp, slotErrorResponse } from "@/lib/http";
 import { lastBookableDate } from "@/lib/booking";
 
 const RATE_LIMIT_WINDOW_MINUTES = 10;
@@ -104,9 +104,7 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await computeAvailableSlots(supabase, serviceId, date);
-  if ("error" in result) {
-    return NextResponse.json({ error: "Η υπηρεσία δεν βρέθηκε." }, { status: 404 });
-  }
+  if ("error" in result) return slotErrorResponse(result.error);
 
   if (!result.slots.includes(startTime)) {
     return NextResponse.json(

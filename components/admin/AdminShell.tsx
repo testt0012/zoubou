@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import AccountSheet from "@/components/admin/AccountSheet";
 import BottomNav from "@/components/admin/BottomNav";
 import PushNotificationPrompt from "@/components/admin/PushNotificationPrompt";
 import { useAdminPush, type AdminPushStatus } from "@/components/admin/useAdminPush";
@@ -17,6 +18,15 @@ function LogoutIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <path d="M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
     </svg>
   );
 }
@@ -49,6 +59,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const { loading } = useAdminData();
   const push = useAdminPush();
   const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   async function handlePushEnable() {
     setPushMessage(PUSH_MESSAGES[await push.enable()]);
@@ -70,6 +81,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }
 
   function handleTouchStart(e: React.TouchEvent) {
+    // A drag that starts inside a pop-up or a swipeable control (the week
+    // strip, the calendar, the time wheels) belongs to that control and
+    // must not also flip the tab underneath.
+    if ((e.target as Element).closest("[data-no-swipe]")) {
+      touchStartX.current = null;
+      return;
+    }
     touchStartX.current = e.touches[0].clientX;
   }
 
@@ -111,6 +129,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               className="h-12 w-auto"
             />
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setAccountOpen(true)}
+                aria-label="Λογαριασμός"
+                title="Λογαριασμός"
+                className="flex items-center justify-center w-9 h-9 rounded-md text-neutral-400 hover:text-neutral-700"
+              >
+                <UserIcon />
+              </button>
               {pushUsable && (
                 <button
                   onClick={handleBellClick}
@@ -158,6 +184,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           )}
         </div>
       </main>
+      {accountOpen && <AccountSheet onClose={() => setAccountOpen(false)} />}
       <BottomNav />
     </div>
   );

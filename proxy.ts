@@ -1,10 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAdminUser } from "@/lib/auth";
 
 // Protects the admin area. Clients never hit anything under /admin — this
-// proxy is the single gate: no session -> bounce to /admin/login, and an
-// already-logged-in admin visiting /admin/login goes straight through to
-// the dashboard.
+// proxy is the single gate: no admin session -> bounce to /admin/login, and
+// an already-logged-in admin visiting /admin/login goes straight through to
+// the dashboard. Being signed in isn't enough: the account has to be the
+// admin (see lib/auth.ts).
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -36,13 +38,15 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname === "/admin/login";
 
-  if (!user && pathname.startsWith("/admin") && !isLoginPage) {
+  const isAdmin = isAdminUser(user);
+
+  if (!isAdmin && pathname.startsWith("/admin") && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isLoginPage) {
+  if (isAdmin && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/dashboard";
     return NextResponse.redirect(url);

@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
         body: `Έχετε ραντεβού αύριο στις ${a.start_time.slice(0, 5)}${
           service ? ` για ${service.name}` : ""
         } στο Zoubou.`,
+        // Tapping it opens the appointment's page, where it can be changed.
+        url: `/a/${a.id}`,
       }
     );
     sent++;

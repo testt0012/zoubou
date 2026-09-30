@@ -10,7 +10,7 @@ import { buildICS } from "@/lib/ics";
 // gets treated as a generic file download instead, which is what the
 // customer was seeing (a save prompt that never actually adds the event).
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: RouteContext<"/api/ics/[appointmentId]">
 ) {
   const { appointmentId } = await ctx.params;
@@ -34,7 +34,7 @@ export async function GET(
     start: athensDateTimeToUTC(appointment.date, appointment.start_time.slice(0, 5)),
     end: athensDateTimeToUTC(appointment.date, appointment.end_time.slice(0, 5)),
     summary: `${serviceName} – Zoubou`,
-    description: `Ραντεβού για ${serviceName} στο κουρείο Zoubou.`,
+    description: `Ραντεβού για ${serviceName} στο κουρείο Zoubou.\nΑλλαγή ή ακύρωση: ${request.nextUrl.origin}/a/${appointment.id}`,
   });
 
   return new NextResponse(ics, {

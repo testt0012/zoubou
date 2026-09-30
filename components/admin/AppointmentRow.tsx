@@ -1,52 +1,36 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { cancelAppointment, uncancelAppointment } from "@/lib/actions/appointments";
+import { useState, useTransition } from "react";
+import { cancelAppointment } from "@/lib/actions/appointments";
 import MoveAppointmentSheet from "@/components/admin/MoveAppointmentSheet";
 import type { AppointmentWithService } from "@/types/database";
 
 // Rendered as one cell in a 3-column grid — just the time, tap for a modal
-// with the full details (end time, service, phone, cancel). Cancelling is
-// immediate but shows an inline "Ακυρώθηκε — Αναίρεση" undo bar for a few
-// seconds instead of a blocking confirm() dialog, since there's nowhere
-// else to recover a mis-cancelled appointment from (no history by design).
-const UNDO_WINDOW_MS = 5000;
-
+// with the full details (end time, service, phone, move, cancel). Cancelling
+// is immediate; the "Ακυρώθηκε — Αναίρεση" undo bar that follows is owned by
+// the grid (DayAppointmentGrid), not by this row: the live refresh drops a
+// cancelled appointment from the list within a second, which would take the
+// row — and its undo bar — with it.
 export default function AppointmentRow({
   appointment,
   index = 0,
+  onCancelled,
 }: {
   appointment: AppointmentWithService;
   index?: number;
+  onCancelled?: (appointment: AppointmentWithService) => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const [, startTransition] = useTransition();
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleCancel() {
-    setCancelled(true);
     setModalOpen(false);
+    onCancelled?.(appointment);
     startTransition(() => {
       cancelAppointment(appointment.id);
     });
-    hideTimer.current = setTimeout(() => setHidden(true), UNDO_WINDOW_MS);
   }
-
-  function handleUndo() {
-    setCancelled(false);
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-      hideTimer.current = null;
-    }
-    startTransition(() => {
-      uncancelAppointment(appointment.id);
-    });
-  }
-
-  if (hidden) return null;
 
   // The customer's details are wiped an hour after the appointment ends;
   // what's left is just the time slot it took up.
@@ -55,19 +39,6 @@ export default function AppointmentRow({
       <div className="rounded-lg px-1 py-2 flex flex-col items-center gap-0.5 bg-neutral-100">
         <span className="text-sm font-semibold text-neutral-400">{appointment.start_time.slice(0, 5)}</span>
         <span className="text-[11px] text-neutral-400 leading-tight">ολοκληρώθηκε</span>
-      </div>
-    );
-  }
-
-  if (cancelled) {
-    return (
-      <div className="col-span-full flex items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-400">
-        <span className="truncate">
-          Ακυρώθηκε — {appointment.first_name} {appointment.last_name}
-        </span>
-        <button type="button" onClick={handleUndo} className="text-brand-purple font-medium shrink-0">
-          Αναίρεση
-        </button>
       </div>
     );
   }
@@ -90,7 +61,7 @@ export default function AppointmentRow({
       </button>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div data-no-swipe className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setModalOpen(false)}

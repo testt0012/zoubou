@@ -3,7 +3,11 @@
 import { requireAdmin } from "@/lib/supabase/server";
 import { isValidDateString, isValidTimeString, normalizeGreekMobile, sanitizeName } from "@/lib/validation";
 import { minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
-import { computeAvailableSlots } from "@/lib/slots";
+import { computeAvailableSlots, type SlotError } from "@/lib/slots";
+
+function slotErrorMessage(error: SlotError): string {
+  return error === "unavailable" ? "Προσωρινό σφάλμα. Δοκιμάστε ξανά σε λίγο." : "Η υπηρεσία δεν βρέθηκε.";
+}
 
 // Called directly from client code (not a <form action>) so the UI can
 // show an inline "Ακυρώθηκε — Αναίρεση" undo affordance instead of a
@@ -31,7 +35,7 @@ export async function getAdminSlots(
   if (!serviceId || !isValidDateString(date)) return { error: "Μη έγκυρα στοιχεία." };
 
   const result = await computeAvailableSlots(supabase, serviceId, date, { excludeAppointmentId });
-  if ("error" in result) return { error: "Η υπηρεσία δεν βρέθηκε." };
+  if ("error" in result) return { error: slotErrorMessage(result.error) };
 
   return { slots: date < todayAthens() ? [] : result.slots };
 }
@@ -79,7 +83,7 @@ export async function createManualAppointment(
   }
 
   const result = await computeAvailableSlots(supabase, serviceId, date);
-  if ("error" in result) return { success: false, error: "Η υπηρεσία δεν βρέθηκε." };
+  if ("error" in result) return { success: false, error: slotErrorMessage(result.error) };
 
   if (!result.slots.includes(startTime)) {
     return { success: false, error: "Η ώρα αυτή δεν είναι διαθέσιμη. Επιλέξτε άλλη ώρα." };
@@ -139,7 +143,7 @@ export async function moveAppointment(
   const result = await computeAvailableSlots(supabase, appointment.service_id, date, {
     excludeAppointmentId: id,
   });
-  if ("error" in result) return { success: false, error: "Η υπηρεσία δεν βρέθηκε." };
+  if ("error" in result) return { success: false, error: slotErrorMessage(result.error) };
 
   if (!result.slots.includes(startTime)) {
     return { success: false, error: "Η ώρα αυτή δεν είναι διαθέσιμη. Επιλέξτε άλλη ώρα." };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createManualAppointment, getAdminSlots } from "@/lib/actions/appointments";
-import DatePicker from "@/components/admin/DatePicker";
+import WeekPicker from "@/components/admin/WeekPicker";
 
 interface ServiceOption {
   id: string;
@@ -91,13 +91,13 @@ export default function ManualAppointmentForm({
       <button
         type="button"
         onClick={handleOpen}
-        className="shrink-0 bg-brand-purple text-white text-sm font-medium rounded-full px-3.5 py-1.5 active:scale-95 transition-transform"
+        className="shrink-0 bg-brand-purple text-white text-sm font-medium rounded-full px-4 h-10 flex items-center active:scale-95 transition-transform"
       >
         Προσθήκη+
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div data-no-swipe className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
@@ -137,45 +137,34 @@ export default function ManualAppointmentForm({
                 </select>
               </div>
 
-              <div className="flex gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium mb-1">Ημερομηνία</div>
-                  <input type="hidden" name="date" value={date} />
-                  <DatePicker
-                    title="Ημερομηνία"
-                    value={date}
-                    minDate={minDate}
-                    onChange={setDate}
-                    className="w-full min-w-0 h-[42px] border border-neutral-300 rounded-md px-2 bg-white"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="start_time" className="block text-sm font-medium mb-1">
-                    Ώρα
-                  </label>
-                  <select
-                    id="start_time"
-                    name="start_time"
-                    required
-                    disabled={!hasSlots}
-                    value={selectedSlot}
-                    onChange={(e) => setSelectedSlot(e.target.value)}
-                    className="w-full min-w-0 border border-neutral-300 rounded-md px-2 py-2 text-sm disabled:text-neutral-400"
-                  >
-                    <option value="" disabled>
-                      {loadingSlots
-                        ? "Φόρτωση…"
-                        : hasSlots
-                          ? "Επιλέξτε ώρα"
-                          : "Καμία διαθέσιμη ώρα"}
+              <div>
+                <div className="text-sm font-medium mb-1">Ημερομηνία</div>
+                <input type="hidden" name="date" value={date} />
+                <WeekPicker value={date} minDate={minDate} onChange={setDate} />
+              </div>
+
+              <div>
+                <label htmlFor="start_time" className="block text-sm font-medium mb-1">
+                  Ώρα
+                </label>
+                <select
+                  id="start_time"
+                  name="start_time"
+                  required
+                  disabled={!hasSlots}
+                  value={selectedSlot}
+                  onChange={(e) => setSelectedSlot(e.target.value)}
+                  className="w-full min-w-0 h-12 border border-neutral-300 rounded-lg px-3 bg-white disabled:text-neutral-400"
+                >
+                  <option value="" disabled>
+                    {loadingSlots ? "Φόρτωση…" : hasSlots ? "Επιλέξτε ώρα" : "Καμία διαθέσιμη ώρα"}
+                  </option>
+                  {slots?.map((time) => (
+                    <option key={time} value={time}>
+                      {time}
                     </option>
-                    {slots?.map((time) => (
-                      <option key={time} value={time}>
-                        {time}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  ))}
+                </select>
               </div>
 
               <div className="flex gap-3">

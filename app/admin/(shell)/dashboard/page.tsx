@@ -95,20 +95,20 @@ export default function AdminDashboardPage() {
         {canGoPrevWeek ? (
           <Link
             href={`/admin/dashboard?weekStart=${prevWeekStart}`}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:bg-neutral-100"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-xl text-neutral-500 hover:bg-neutral-100"
             aria-label="Προηγούμενη εβδομάδα"
           >
             ‹
           </Link>
         ) : (
-          <span className="w-8 h-8" />
+          <span className="w-11 h-11" />
         )}
         <span className="text-xs text-neutral-400">
           {formatDateShort(weekStart)} – {formatDateShort(weekEnd)}
         </span>
         <Link
           href={`/admin/dashboard?weekStart=${addDays(weekStart, 7)}`}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:bg-neutral-100"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-xl text-neutral-500 hover:bg-neutral-100"
           aria-label="Επόμενη εβδομάδα"
         >
           ›

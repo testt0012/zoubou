@@ -20,6 +20,7 @@ import {
 } from "@/lib/time";
 import { bookedMinutesForDate, occupancyPercent, workingMinutesForDate } from "@/lib/occupancy";
 import { recurringMinutesForDate } from "@/lib/recurring";
+import { addMonths, classifyDays, dayTotals, previousMonthRange, previousWeekRange, type DayTotals } from "@/lib/reports";
 import { isValidDateString } from "@/lib/validation";
 
 const MAX_REPORT_DAYS = 366;
@@ -40,20 +41,17 @@ interface RangeReport {
   title: string;
   from: string;
   to: string;
+  // Set when part of the period has no recorded days (the app has no data
+  // from before then): the figures cover only the days from this date on.
+  coveredFrom: string | null;
+  // The whole period is older than anything recorded: there is nothing to
+  // report (as opposed to a period the shop was simply closed for).
+  noData: boolean;
+  firstRecorded: string | null;
   days: number;
   bookedHours: number;
   workingHours: number;
   percent: number;
-}
-
-// "YYYY-MM-DD" moved by whole months, keeping the day where the target
-// month has it (31 March - 1 month = 28/29 February).
-function addMonths(dateStr: string, months: number): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const first = new Date(Date.UTC(y, m - 1 + months, 1));
-  const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-  first.setUTCDate(Math.min(d, lastDay));
-  return first.toISOString().slice(0, 10);
 }
 
 // Every row of a date-ranged read, a page at a time: six months of
@@ -68,6 +66,45 @@ async function fetchSpans(table: "appointments" | "blocked_slots", from: string,
     rows.push(...((data ?? []) as Span[]));
     if (!data || data.length < PAGE_SIZE) return rows;
   }
+}
+
+// The frozen per-day totals (see migration 0013 / lib/stats.ts) for the
+// dates in [from, to], plus the first day ever recorded. Null when they
+// can't be read (e.g. the table doesn't exist yet) — callers then compute
+// every day live, as before.
+async function loadSnapshots(
+  from: string,
+  to: string
+): Promise<{ days: Map<string, DayTotals>; first: string | null } | null> {
+  const supabase = createClient();
+  const days = new Map<string, DayTotals>();
+
+  const { data: first, error: firstError } = await supabase
+    .from("daily_stats")
+    .select("date")
+    .order("date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (firstError) return null;
+
+  if (from <= to) {
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("daily_stats")
+        .select("date, working_minutes, booked_minutes")
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (error) return null;
+      for (const row of data ?? []) {
+        days.set(row.date as string, { working: row.working_minutes as number, booked: row.booked_minutes as number });
+      }
+      if (!data || data.length < PAGE_SIZE) break;
+    }
+  }
+
+  return { days, first: (first?.date as string | undefined) ?? null };
 }
 
 export default function AdminReportsPage() {
@@ -87,6 +124,21 @@ export default function AdminReportsPage() {
     ensureAppointmentsRange(rangeStart, rangeEnd);
   }, [rangeStart, rangeEnd, ensureAppointmentsRange]);
 
+  // Past days of the shown week come from the frozen totals rather than
+  // being recomputed from today's hours and regulars.
+  const yesterday = addDays(today, -1);
+  const [weekSnapshots, setWeekSnapshots] = useState<Map<string, DayTotals>>(new Map());
+  useEffect(() => {
+    if (rangeStart > yesterday) return;
+    let cancelled = false;
+    loadSnapshots(rangeStart, rangeEnd < yesterday ? rangeEnd : yesterday).then((snapshots) => {
+      if (!cancelled) setWeekSnapshots(snapshots?.days ?? new Map());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rangeStart, rangeEnd, yesterday]);
+
   // Occupancy for a span of dates (% booked hours vs. working hours), either
   // from one of the one-tap buttons or the "από/έως" form. Its own on-demand
   // fetch: it targets historical dates outside the forward-looking cache
@@ -105,28 +157,51 @@ export default function AdminReportsPage() {
     setReportError(null);
     setReportLoading(true);
 
-    const [reportBlockedList, reportAppointmentsList] = await Promise.all([
-      fetchSpans("blocked_slots", from, to),
-      fetchSpans("appointments", from, to),
-    ]);
-    setReportLoading(false);
-
     const dates = eachDate(from, to).filter((d) => weekday === undefined || weekdayOf(d) === weekday);
+    const snapshots = await loadSnapshots(from, to < yesterday ? to : yesterday);
+
+    // Each day is one of: read from the frozen totals; left out, because it
+    // is older than anything ever recorded; or computed live from the
+    // current hours (today and later, or a day the nightly job hasn't
+    // frozen yet).
+    const sorted = classifyDays(dates, today, snapshots?.days ?? null, snapshots?.first ?? null);
+    const live = sorted.live;
+    const counted = [...sorted.frozen.map((f) => f.date), ...live].sort();
     let workingMinutes = 0;
     let bookedMinutes = 0;
-    for (const d of dates) {
-      workingMinutes += workingMinutesForDate(availabilityRules, reportBlockedList, d);
-      // Regular customers' standing visits count as booked time too.
-      bookedMinutes +=
-        bookedMinutesForDate(reportAppointmentsList, d) +
-        recurringMinutesForDate(visits, availabilityRules, reportBlockedList, reportAppointmentsList, d);
+    for (const { totals } of sorted.frozen) {
+      workingMinutes += totals.working;
+      bookedMinutes += totals.booked;
     }
+
+    if (live.length > 0) {
+      const liveFrom = live[0];
+      const liveTo = live[live.length - 1];
+      const [reportBlockedList, reportAppointmentsList] = await Promise.all([
+        fetchSpans("blocked_slots", liveFrom, liveTo),
+        fetchSpans("appointments", liveFrom, liveTo),
+      ]);
+      for (const d of live) {
+        // Regular customers' standing visits count as booked time too.
+        const totals = dayTotals(
+          workingMinutesForDate(availabilityRules, reportBlockedList, d),
+          bookedMinutesForDate(reportAppointmentsList, d) +
+            recurringMinutesForDate(visits, availabilityRules, reportBlockedList, reportAppointmentsList, d)
+        );
+        workingMinutes += totals.working;
+        bookedMinutes += totals.booked;
+      }
+    }
+    setReportLoading(false);
 
     setReport({
       title,
       from,
       to,
-      days: dates.length,
+      coveredFrom: counted.length < dates.length && counted.length > 0 ? counted[0] : null,
+      noData: counted.length === 0 && dates.length > 0,
+      firstRecorded: snapshots?.first ?? null,
+      days: counted.length,
       workingHours: Math.round((workingMinutes / 60) * 10) / 10,
       bookedHours: Math.round((bookedMinutes / 60) * 10) / 10,
       percent: occupancyPercent(bookedMinutes, workingMinutes),
@@ -135,14 +210,14 @@ export default function AdminReportsPage() {
 
   // Monday to Sunday of the week before this one.
   function runPreviousWeek() {
-    const from = addDays(startOfWeek(today), -7);
-    runReport("week", "Προηγούμενη εβδομάδα", from, addDays(from, 6));
+    const { from, to } = previousWeekRange(today);
+    runReport("week", "Προηγούμενη εβδομάδα", from, to);
   }
 
   // The whole previous month, 1st to last day.
   function runPreviousMonth() {
-    const firstOfThisMonth = `${today.slice(0, 8)}01`;
-    runReport("month", "Προηγούμενος μήνας", addMonths(firstOfThisMonth, -1), addDays(firstOfThisMonth, -1));
+    const { from, to } = previousMonthRange(today);
+    runReport("month", "Προηγούμενος μήνας", from, to);
   }
 
   // Every e.g. Tuesday of the last six months, up to yesterday.
@@ -219,8 +294,9 @@ export default function AdminReportsPage() {
 
           <div className="grid grid-cols-7 gap-1">
             {rangeDates.map((d, i) => {
-              const working = workingMinutesForDate(availabilityRules, blockedSlots, d);
-              const percent = occupancyPercent(takenMinutesFor(d), working);
+              const frozen = d < today ? weekSnapshots.get(d) : undefined;
+              const working = frozen ? frozen.working : workingMinutesForDate(availabilityRules, blockedSlots, d);
+              const percent = occupancyPercent(frozen ? frozen.booked : takenMinutesFor(d), working);
               return (
                 <div
                   key={d}
@@ -297,16 +373,33 @@ export default function AdminReportsPage() {
           {report && (
             <div className="mt-4 border border-neutral-200 rounded-xl px-4 py-4 flex items-center gap-4">
               <div className="text-3xl font-bold text-brand-purple shrink-0">
-                {report.workingHours === 0 ? "—" : `${report.percent}%`}
+                {report.noData || report.workingHours === 0 ? "—" : `${report.percent}%`}
               </div>
               <div className="text-sm text-neutral-500 min-w-0">
                 <div className="font-medium text-neutral-900">{report.title}</div>
-                {report.workingHours === 0
-                  ? "Κλειστά σε όλο το διάστημα"
-                  : `${report.bookedHours} ώρες κλεισμένες από ${report.workingHours} ώρες λειτουργίας`}
+                {report.noData ? (
+                  <>
+                    Δεν υπάρχουν καταγραφές για αυτό το διάστημα
+                    {report.firstRecorded && <> — οι καταγραφές ξεκινούν από {formatDateShort(report.firstRecorded)}</>}.
+                  </>
+                ) : report.workingHours === 0 ? (
+                  "Κλειστά σε όλο το διάστημα"
+                ) : (
+                  `${report.bookedHours} ώρες κλεισμένες από ${report.workingHours} ώρες λειτουργίας`
+                )}
                 <br />
-                {formatDateLong(report.from)} – {formatDateLong(report.to)} · {report.days}{" "}
-                {report.days === 1 ? "ημέρα" : "ημέρες"}
+                {formatDateLong(report.from)} – {formatDateLong(report.to)}
+                {!report.noData && (
+                  <>
+                    {" "}
+                    · {report.days} {report.days === 1 ? "ημέρα" : "ημέρες"}
+                  </>
+                )}
+                {report.coveredFrom && (
+                  <span className="block mt-1 text-xs text-neutral-400">
+                    Υπολογίστηκε από {formatDateShort(report.coveredFrom)} — δεν υπάρχουν καταγραφές πριν.
+                  </span>
+                )}
               </div>
             </div>
           )}

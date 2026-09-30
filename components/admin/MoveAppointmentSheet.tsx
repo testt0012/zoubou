@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import BottomSheet from "@/components/admin/BottomSheet";
-import DatePicker from "@/components/admin/DatePicker";
+import WeekPicker from "@/components/admin/WeekPicker";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { getAdminSlots, moveAppointment } from "@/lib/actions/appointments";
 import { formatDateLong, todayAthens } from "@/lib/time";
@@ -87,13 +87,7 @@ export default function MoveAppointmentSheet({
 
         <div className="flex flex-col gap-1 text-sm text-neutral-500">
           Νέα ημερομηνία
-          <DatePicker
-            title="Νέα ημερομηνία"
-            value={date}
-            minDate={todayAthens()}
-            onChange={setDate}
-            className="w-full min-w-0 h-12 border border-neutral-300 rounded-lg px-3 bg-white text-base text-neutral-900"
-          />
+          <WeekPicker value={date} minDate={todayAthens()} onChange={setDate} />
         </div>
 
         <div className="text-sm text-neutral-500">Νέα ώρα</div>
