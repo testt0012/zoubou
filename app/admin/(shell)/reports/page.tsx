@@ -25,7 +25,13 @@ import { isValidDateString } from "@/lib/validation";
 
 const MAX_REPORT_DAYS = 366;
 const PAGE_SIZE = 1000; // PostgREST returns at most this many rows per request
-const WEEKDAY_HISTORY_MONTHS = 6;
+const DEFAULT_HISTORY_MONTHS = 6;
+const HISTORY_MONTH_CHOICES = Array.from({ length: 12 }, (_, i) => i + 1);
+const HISTORY_MONTHS_KEY = "zoubou-report-months";
+
+function monthsLabel(months: number): string {
+  return months === 1 ? "1 μήνας" : `${months} μήνες`;
+}
 const SHORT_WEEKDAYS = ["Δε", "Τρ", "Τε", "Πε", "Πα", "Σα", "Κυ"];
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0]; // Monday..Sunday, matching SHORT_WEEKDAYS
 // "Τρίτες", "Σάββατα"… indexed like weekdayOf (0 = Sunday).
@@ -146,6 +152,18 @@ export default function AdminReportsPage() {
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  // How far back the per-weekday figures look (1–12 months); remembered on this device.
+  const [historyMonths, setHistoryMonths] = useState(DEFAULT_HISTORY_MONTHS);
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      try {
+        const saved = Number(localStorage.getItem(HISTORY_MONTHS_KEY));
+        if (HISTORY_MONTH_CHOICES.includes(saved)) setHistoryMonths(saved);
+      } catch {
+        // private mode / blocked storage: keep the default
+      }
+    });
+  }, []);
   const [reportLoading, setReportLoading] = useState(false);
   const [report, setReport] = useState<RangeReport | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -220,15 +238,26 @@ export default function AdminReportsPage() {
     runReport("month", "Προηγούμενος μήνας", from, to);
   }
 
-  // Every e.g. Tuesday of the last six months, up to yesterday.
-  function runWeekday(weekday: number) {
+  // Every e.g. Tuesday of the last `months` months, up to yesterday.
+  function runWeekday(weekday: number, months: number = historyMonths) {
     runReport(
       `weekday-${weekday}`,
-      `${WEEKDAY_PLURALS[weekday]} · τελευταίοι ${WEEKDAY_HISTORY_MONTHS} μήνες`,
-      addMonths(today, -WEEKDAY_HISTORY_MONTHS),
+      `${WEEKDAY_PLURALS[weekday]} · ${months === 1 ? "τελευταίος μήνας" : `τελευταίοι ${months} μήνες`}`,
+      addMonths(today, -months),
       addDays(today, -1),
       weekday
     );
+  }
+
+  // Changing the period also redoes the weekday figures already on screen.
+  function changeHistoryMonths(months: number) {
+    setHistoryMonths(months);
+    try {
+      localStorage.setItem(HISTORY_MONTHS_KEY, String(months));
+    } catch {
+      // not remembered, still applied
+    }
+    if (activeKey?.startsWith("weekday-")) runWeekday(Number(activeKey.slice("weekday-".length)), months);
   }
 
   function handleReportSubmit(e: React.FormEvent) {
@@ -327,7 +356,24 @@ export default function AdminReportsPage() {
             </button>
           </div>
 
-          <div className="text-sm text-neutral-500 mb-1">Ανά ημέρα, τελευταίοι {WEEKDAY_HISTORY_MONTHS} μήνες</div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <label htmlFor="history-months" className="text-sm text-neutral-500">
+              Ανά ημέρα, για τους τελευταίους
+            </label>
+            <select
+              id="history-months"
+              value={historyMonths}
+              onChange={(e) => changeHistoryMonths(Number(e.target.value))}
+              disabled={reportLoading}
+              className="h-12 w-36 border border-neutral-300 rounded-lg px-3 bg-white text-base text-neutral-900 disabled:opacity-60"
+            >
+              {HISTORY_MONTH_CHOICES.map((m) => (
+                <option key={m} value={m}>
+                  {monthsLabel(m)}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-7 gap-1 mb-4">
             {WEEKDAYS.map((weekday, i) => (
               <button
