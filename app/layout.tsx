@@ -25,15 +25,11 @@ export const metadata: Metadata = {
         media: "(prefers-color-scheme: dark)",
       },
     ],
-    apple: [
-      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-      {
-        url: "/icons/apple-touch-icon-dark.png",
-        sizes: "180x180",
-        type: "image/png",
-        media: "(prefers-color-scheme: dark)",
-      },
-    ],
+    // Transparent background: from iOS 18 the home screen then draws the
+    // dark or light icon by itself to match the phone's appearance (the
+    // way Plastigia's icon does). The older white/dark pair is kept in
+    // /icons as apple-touch-icon.png and apple-touch-icon-dark.png.
+    apple: [{ url: "/icons/apple-touch-icon-auto.png", sizes: "180x180", type: "image/png" }],
   },
 };
 

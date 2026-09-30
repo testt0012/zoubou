@@ -50,13 +50,27 @@ html,
   background: url("/background.webp") top center / cover no-repeat;
 }
 
+/* The layer reaches 120px above the viewport, and the photo — sized like
+   "cover" on the viewport (1600x916 image) — is shifted down by the same
+   amount so it sits exactly where it did:
+   iOS draws the status bar / toolbar areas over whatever is at the very edge
+   and a layer ending exactly at the viewport left a white strip under the
+   status bar. */
+.app-background {
+  top: -120px;
+  background-size: max(100vw, calc(100lvh * 1.7467)) auto;
+  background-position: center 120px;
+}
+
 /* On phone-width screens, "cover" crops most of the photo's width down to a
    thin vertical strip — position it so the "BARBER" sign stays in frame
    instead of the plain wall. */
 @media (max-width: 640px) {
-  html,
-  .app-background {
+  html {
     background-position: 65% top;
+  }
+  .app-background {
+    background-position: 65% 120px;
   }
 }
 
