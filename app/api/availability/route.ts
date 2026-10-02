@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγα λεπτά." }, { status: 429 });
   }
 
-  if ("error" in result) return slotErrorResponse(result.error, "api/availability");
+  if ("error" in result) return slotErrorResponse(result, "api/availability");
 
   return NextResponse.json(
     { dates: result.dates, days: result.days, firstDay: result.firstDay },

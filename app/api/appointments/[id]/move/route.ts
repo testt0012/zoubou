@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/appoint
   const result = await computeAvailableSlots(supabase, appointment.serviceId, date, {
     excludeAppointmentId: appointment.id,
   });
-  if ("error" in result) return slotErrorResponse(result.error, "api/appointments/move");
+  if ("error" in result) return slotErrorResponse(result, "api/appointments/move");
 
   if (!result.slots.includes(startTime)) {
     return NextResponse.json(

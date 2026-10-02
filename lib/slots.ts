@@ -14,6 +14,8 @@ import {
 type Db = SupabaseClient<any, any, any>;
 
 export type SlotError = "service_not_found" | "invalid_date" | "unavailable";
+// A failed computation; `detail` is what the database said (for the error log).
+export type SlotFailure = { error: SlotError; detail?: string };
 
 export interface DayAvailability {
   open: boolean;
@@ -148,6 +150,42 @@ function serviceDuration(result: {
   return result.data.duration_minutes as number;
 }
 
+type ReadResult = { error: { code?: string; message?: string } | null };
+
+// What went wrong in a batch of reads, as text for the error log; null if
+// every read worked. (`visits` is null when the regulars couldn't be read.)
+function readFailure(results: readonly [ReadResult, ReadResult, ReadResult, ReadResult, ReadResult, unknown]): string | null {
+  const [service, settings, rules, blocked, booked, visits] = results;
+  const names = ["services", "settings", "availability_rules", "blocked_slots", "appointments"];
+  const failed = [service, settings, rules, blocked, booked].flatMap((r, i) =>
+    r.error ? [`${names[i]}: ${r.error.code ?? ""} ${r.error.message ?? ""}`.trim()] : []
+  );
+  if (visits === null) failed.push("recurring_customers");
+  return failed.length ? failed.join("; ") : null;
+}
+
+// A read that fails now and then (a dropped connection, a database busy for a
+// moment) is tried once more after a short pause, so a customer doesn't see
+// an error for a blip. An unknown service isn't a blip and isn't retried.
+async function readWithOneRetry<T extends readonly [ReadResult, ReadResult, ReadResult, ReadResult, ReadResult, unknown]>(
+  run: () => PromiseLike<T>
+): Promise<T> {
+  const attempt = async () => {
+    try {
+      return await run();
+    } catch (error) {
+      return error as Error;
+    }
+  };
+  let result = await attempt();
+  if (result instanceof Error || (readFailure(result) && result[0].error?.code !== "22P02")) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    result = await attempt();
+  }
+  if (result instanceof Error) throw result;
+  return result;
+}
+
 const serviceQuery = (supabase: Db, serviceId: string) =>
   supabase
     .from("services")
@@ -188,26 +226,30 @@ export async function computeAvailableSlots(
   serviceId: string,
   date: string,
   options: SlotOptions = {}
-): Promise<SlotsResult | { error: SlotError }> {
-  const [serviceRes, settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
-    serviceQuery(supabase, serviceId),
-    supabase.from("settings").select("*").eq("id", true).maybeSingle(),
-    supabase.from("availability_rules").select("weekday, start_time, end_time").eq("weekday", weekdayOf(date)),
-    supabase.from("blocked_slots").select("date, start_time, end_time").eq("date", date),
-    supabase
-      .from("appointments")
-      .select("id, date, start_time, end_time")
-      .eq("date", date)
-      .eq("status", "confirmed"),
-    loadRegulars(supabase, date),
-  ]);
+): Promise<SlotsResult | SlotFailure> {
+  const loaded = await readWithOneRetry(() =>
+    Promise.all([
+      serviceQuery(supabase, serviceId),
+      supabase.from("settings").select("*").eq("id", true).maybeSingle(),
+      supabase.from("availability_rules").select("weekday, start_time, end_time").eq("weekday", weekdayOf(date)),
+      supabase.from("blocked_slots").select("date, start_time, end_time").eq("date", date),
+      supabase
+        .from("appointments")
+        .select("id, date, start_time, end_time")
+        .eq("date", date)
+        .eq("status", "confirmed"),
+      loadRegulars(supabase, date),
+    ])
+  );
+  const [serviceRes, settingsRes, rulesRes, blockedRes, bookedRes, visits] = loaded;
 
   const duration = serviceDuration(serviceRes);
-  if (typeof duration !== "number") return { error: duration };
-
-  if (settingsRes.error || rulesRes.error || blockedRes.error || bookedRes.error || visits === null) {
-    return { error: "unavailable" };
+  if (typeof duration !== "number") {
+    return duration === "unavailable" ? { error: duration, detail: readFailure(loaded) ?? undefined } : { error: duration };
   }
+
+  const failure = readFailure(loaded);
+  if (failure || visits === null) return { error: "unavailable", detail: failure ?? undefined };
 
   const slots = slotsForDate(
     {
@@ -237,27 +279,31 @@ export async function computeAvailableDates(
   from: string,
   to: string,
   options: SlotOptions = {}
-): Promise<DatesResult | { error: SlotError }> {
-  const [serviceRes, settingsRes, rulesRes, blockedRes, bookedRes, visits] = await Promise.all([
-    serviceQuery(supabase, serviceId),
-    supabase.from("settings").select("*").eq("id", true).maybeSingle(),
-    supabase.from("availability_rules").select("weekday, start_time, end_time"),
-    supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", from).lte("date", to),
-    supabase
-      .from("appointments")
-      .select("id, date, start_time, end_time")
-      .gte("date", from)
-      .lte("date", to)
-      .eq("status", "confirmed"),
-    loadRegulars(supabase, to),
-  ]);
+): Promise<DatesResult | SlotFailure> {
+  const loaded = await readWithOneRetry(() =>
+    Promise.all([
+      serviceQuery(supabase, serviceId),
+      supabase.from("settings").select("*").eq("id", true).maybeSingle(),
+      supabase.from("availability_rules").select("weekday, start_time, end_time"),
+      supabase.from("blocked_slots").select("date, start_time, end_time").gte("date", from).lte("date", to),
+      supabase
+        .from("appointments")
+        .select("id, date, start_time, end_time")
+        .gte("date", from)
+        .lte("date", to)
+        .eq("status", "confirmed"),
+      loadRegulars(supabase, to),
+    ])
+  );
+  const [serviceRes, settingsRes, rulesRes, blockedRes, bookedRes, visits] = loaded;
 
   const duration = serviceDuration(serviceRes);
-  if (typeof duration !== "number") return { error: duration };
-
-  if (settingsRes.error || rulesRes.error || blockedRes.error || bookedRes.error || visits === null) {
-    return { error: "unavailable" };
+  if (typeof duration !== "number") {
+    return duration === "unavailable" ? { error: duration, detail: readFailure(loaded) ?? undefined } : { error: duration };
   }
+
+  const failure = readFailure(loaded);
+  if (failure || visits === null) return { error: "unavailable", detail: failure ?? undefined };
 
   const inputs: SlotInputs = {
     duration,

@@ -103,13 +103,14 @@ test("unknown or inactive service -> service_not_found", async () => {
 test("a database error is never read as 'nothing booked' — the answer is 'unavailable'", async () => {
   for (const table of ["appointments", "blocked_slots", "availability_rules", "settings", "services"]) {
     const result = await computeAvailableSlots(makeDb(base, { errors: { [table]: "XX000" } }), "svc", TUE, { now: NOW });
-    assert.deepEqual(result, { error: "unavailable" }, table);
+    assert.ok("error" in result && result.error === "unavailable", table);
+    assert.ok("detail" in result && result.detail?.includes(table), `${table}: the log says which read failed`);
   }
   // …except a regular-customers table that doesn't exist yet, which just means no regulars.
   const missing = await computeAvailableSlots(makeDb(base, { errors: { recurring_customers: "42P01" } }), "svc", TUE, { now: NOW });
   assert.ok("slots" in missing && missing.slots.length === 6);
   const broken = await computeAvailableSlots(makeDb(base, { errors: { recurring_customers: "XX000" } }), "svc", TUE, { now: NOW });
-  assert.deepEqual(broken, { error: "unavailable" });
+  assert.ok("error" in broken && broken.error === "unavailable");
 });
 
 test("a fixed regular's time is never offered on their days, and only on those days", async () => {
@@ -173,7 +174,7 @@ test("available dates agree with the slot list for every day in a range", async 
 
 test("available dates: a database error is 'unavailable', not an empty calendar", async () => {
   const result = await computeAvailableDates(makeDb(base, { errors: { appointments: "XX000" } }), "svc", "2026-10-01", "2026-10-21", { now: NOW });
-  assert.deepEqual(result, { error: "unavailable" });
+  assert.ok("error" in result && result.error === "unavailable");
 });
 
 test("a service id that isn't even a valid id is 'not found', not a server fault", async () => {

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/appointm
   const result = await computeAvailableSlots(supabase, appointment.serviceId, date, {
     excludeAppointmentId: appointment.id,
   });
-  if ("error" in result) return slotErrorResponse(result.error, "api/appointments/slots");
+  if ("error" in result) return slotErrorResponse(result, "api/appointments/slots");
 
   return NextResponse.json({ slots: result.slots });
 }

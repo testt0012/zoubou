@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if ("error" in result) return slotErrorResponse(result.error, "api/book");
+  if ("error" in result) return slotErrorResponse(result, "api/book");
 
   if (!result.slots.includes(startTime)) {
     return NextResponse.json(

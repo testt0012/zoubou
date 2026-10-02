@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/appointm
   const result = await computeAvailableDates(supabase, appointment.serviceId, today, lastBookableDate(today), {
     excludeAppointmentId: appointment.id,
   });
-  if ("error" in result) return slotErrorResponse(result.error, "api/appointments/availability");
+  if ("error" in result) return slotErrorResponse(result, "api/appointments/availability");
 
   return NextResponse.json({ dates: result.dates, days: result.days });
 }

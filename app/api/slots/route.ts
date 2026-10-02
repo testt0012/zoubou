@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if ("error" in result) return slotErrorResponse(result.error, "api/slots");
+  if ("error" in result) return slotErrorResponse(result, "api/slots");
 
   // Short-lived shared copy: the same day's times are asked for again and
   // again (switching between days), and a slot taken in the meantime is
