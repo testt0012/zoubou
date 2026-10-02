@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     if (!a.push_endpoint || !a.push_p256dh || !a.push_auth) continue;
 
     const service = a.services as unknown as { name: string } | null;
-    await sendPush(
+    const result = await sendPush(
       { endpoint: a.push_endpoint, p256dh: a.push_p256dh, auth: a.push_auth },
       {
         title: "Υπενθύμιση ραντεβού",
@@ -54,8 +54,15 @@ export async function GET(request: NextRequest) {
         url: `/a/${a.id}`,
       }
     );
-    sent++;
-    await supabase.from("appointments").update({ reminder_sent: true }).eq("id", a.id);
+    if (result.ok) sent++;
+    await supabase
+      .from("appointments")
+      .update({
+        reminder_sent: true,
+        // The push service says this subscription no longer exists.
+        ...(result.gone ? { push_endpoint: null, push_p256dh: null, push_auth: null } : {}),
+      })
+      .eq("id", a.id);
   }
 
   return NextResponse.json({ sent });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayAthens } from "@/lib/time";
+import { isPushServiceEndpoint } from "@/lib/push/endpoint";
 
 // Customers have no account, so their push subscription (opt-in, right
 // after a successful booking) is attached directly to that one appointment
@@ -25,6 +26,16 @@ export async function POST(request: NextRequest) {
     typeof subscription.endpoint !== "string" ||
     typeof subscription.keys?.p256dh !== "string" ||
     typeof subscription.keys?.auth !== "string"
+  ) {
+    return NextResponse.json({ error: "Μη έγκυρα στοιχεία." }, { status: 400 });
+  }
+
+  // The server later sends a request to this address, so it has to be a real
+  // browser push service — not any URL someone cares to submit.
+  if (
+    !isPushServiceEndpoint(subscription.endpoint) ||
+    subscription.keys.p256dh.length > 200 ||
+    subscription.keys.auth.length > 100
   ) {
     return NextResponse.json({ error: "Μη έγκυρα στοιχεία." }, { status: 400 });
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAdminNotice } from "@/components/admin/AdminNotice";
 import { deleteService, updateService } from "@/lib/actions/services";
 import type { Service } from "@/types/database";
 
@@ -24,14 +25,32 @@ function TrashIcon() {
 // to switch the row into an editable form, which also holds delete.
 export default function ServiceRow({ service: s }: { service: Service }) {
   const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const notify = useAdminNotice();
+
+  // Runs a save or delete; the row stays in edit mode (with a message) if it
+  // didn't work.
+  async function run(action: () => Promise<{ success: boolean; error?: string }>, failure: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await action();
+      if (result.success) setEditing(false);
+      else notify(result.error ?? failure);
+    } catch {
+      notify(`${failure} Ελέγξτε τη σύνδεση και δοκιμάστε ξανά.`);
+    }
+    setBusy(false);
+  }
 
   if (editing) {
     return (
       <div className="border border-neutral-200 rounded-lg px-4 py-3 flex flex-col gap-3">
         <form
-          action={async (formData) => {
-            await updateService(formData);
-            setEditing(false);
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            run(() => updateService(formData), "Οι αλλαγές δεν αποθηκεύτηκαν.");
           }}
           className="flex flex-col sm:flex-row sm:items-center gap-3"
         >
@@ -40,6 +59,7 @@ export default function ServiceRow({ service: s }: { service: Service }) {
             name="name"
             defaultValue={s.name}
             required
+            maxLength={60}
             className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
           />
           <div className="flex items-center gap-2">
@@ -57,9 +77,10 @@ export default function ServiceRow({ service: s }: { service: Service }) {
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+              disabled={busy}
+              className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
-              Αποθήκευση
+              {busy ? "Αποθήκευση…" : "Αποθήκευση"}
             </button>
             <button
               type="button"
@@ -70,18 +91,17 @@ export default function ServiceRow({ service: s }: { service: Service }) {
             </button>
           </div>
         </form>
-        <form action={deleteService} className="self-start">
-          <input type="hidden" name="id" value={s.id} />
-          <button
-            type="submit"
-            aria-label="Διαγραφή"
-            title="Διαγραφή"
-            className="flex items-center gap-1.5 text-sm text-red-600 px-2 py-1"
-          >
-            <TrashIcon />
-            Διαγραφή
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={() => run(() => deleteService(s.id), "Η υπηρεσία δεν διαγράφηκε.")}
+          disabled={busy}
+          aria-label="Διαγραφή"
+          title="Διαγραφή"
+          className="self-start flex items-center gap-1.5 text-sm text-red-600 px-2 py-1 disabled:opacity-60"
+        >
+          <TrashIcon />
+          Διαγραφή
+        </button>
       </div>
     );
   }

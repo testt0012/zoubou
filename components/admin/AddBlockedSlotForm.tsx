@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { addBlockedSlot } from "@/lib/actions/availability";
+import { useAdminNotice } from "@/components/admin/AdminNotice";
 import DatePicker from "@/components/admin/DatePicker";
 import AffectedAppointments, { type AffectedPerson } from "@/components/admin/AffectedAppointments";
 import { useClosureConflicts } from "@/components/admin/useClosureConflicts";
@@ -18,7 +19,8 @@ export default function AddBlockedSlotForm() {
   // Kept on screen after the closure is added, until dismissed — the list
   // of customers that now have to be called.
   const [affected, setAffected] = useState<AffectedPerson[] | null>(null);
-  const [, startTransition] = useTransition();
+  const notify = useAdminNotice();
+  const [saving, setSaving] = useState(false);
 
   function handleDateFromChange(value: string) {
     setDateFrom(value);
@@ -32,15 +34,26 @@ export default function AddBlockedSlotForm() {
     return closureConflicts(eachDate(dateFrom, dateTo), FULL_DAY_START, FULL_DAY_END);
   }
 
-  function submit() {
+  async function submit() {
+    if (saving) return;
     const formData = new FormData();
     formData.set("dateFrom", dateFrom);
     formData.set("dateTo", dateTo);
     formData.set("start_time", FULL_DAY_START);
     formData.set("end_time", FULL_DAY_END);
-    startTransition(() => {
-      addBlockedSlot(formData);
-    });
+    setSaving(true);
+    let result: { success: boolean; error?: string };
+    try {
+      result = await addBlockedSlot(formData);
+    } catch {
+      result = { success: false, error: "Δεν αποθηκεύτηκε. Ελέγξτε τη σύνδεση και δοκιμάστε ξανά." };
+    }
+    setSaving(false);
+    if (!result.success) {
+      // The dates stay in the form, ready for another try.
+      notify(result.error ?? "Δεν αποθηκεύτηκε.");
+      return;
+    }
     setAffected(conflicts && conflicts.length > 0 ? conflicts : null);
     setDateFrom("");
     setDateTo("");
@@ -115,10 +128,10 @@ export default function AddBlockedSlotForm() {
         {!(conflicts && conflicts.length > 0) && (
           <button
             type="submit"
-            disabled={!dateFrom || !dateTo}
+            disabled={!dateFrom || !dateTo || saving}
             className="h-12 rounded-lg bg-brand-purple text-white font-medium disabled:opacity-60"
           >
-            Προσθήκη
+            {saving ? "Αποθήκευση…" : "Προσθήκη"}
           </button>
         )}
       </form>

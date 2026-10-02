@@ -1,13 +1,32 @@
 "use client";
 
+import { useState } from "react";
 import SlideTransition from "@/components/admin/SlideTransition";
 import ServiceRow from "@/components/admin/ServiceRow";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { useAdminNotice } from "@/components/admin/AdminNotice";
 import { createService } from "@/lib/actions/services";
 
 export default function AdminServicesPage() {
   const { services } = useAdminData();
   const activeServices = services.filter((s) => s.active);
+  const notify = useAdminNotice();
+  const [saving, setSaving] = useState(false);
+
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (saving) return;
+    const form = e.currentTarget;
+    setSaving(true);
+    try {
+      const result = await createService(new FormData(form));
+      if (result.success) form.reset();
+      else notify(result.error ?? "Η υπηρεσία δεν αποθηκεύτηκε.");
+    } catch {
+      notify("Η υπηρεσία δεν αποθηκεύτηκε. Ελέγξτε τη σύνδεση και δοκιμάστε ξανά.");
+    }
+    setSaving(false);
+  }
 
   return (
     <SlideTransition>
@@ -28,7 +47,7 @@ export default function AdminServicesPage() {
           <span className="text-neutral-400 transition-transform group-open:rotate-45">+</span>
         </summary>
         <form
-          action={createService}
+          onSubmit={handleCreate}
           className="px-4 pb-4 pt-3 border-t border-neutral-100 flex flex-col sm:flex-row gap-3"
         >
           <input
@@ -36,6 +55,7 @@ export default function AdminServicesPage() {
             aria-label="Όνομα υπηρεσίας"
             placeholder="π.χ. Παιδικό κούρεμα"
             required
+            maxLength={60}
             className="flex-1 border border-neutral-300 rounded-md px-3 py-2"
           />
           <input
@@ -50,9 +70,10 @@ export default function AdminServicesPage() {
           />
           <button
             type="submit"
-            className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium"
+            disabled={saving}
+            className="bg-brand-purple text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
-            Προσθήκη
+            {saving ? "Αποθήκευση…" : "Προσθήκη"}
           </button>
         </form>
       </details>

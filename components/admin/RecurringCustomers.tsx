@@ -46,9 +46,12 @@ function RecurringCustomerSheet({
 
   function handleDelete() {
     startTransition(async () => {
-      await deleteRecurringCustomer(customer.id);
+      const result = await deleteRecurringCustomer(customer.id);
       await refreshRecurringCustomers();
-      onClose();
+      if (!result.success) {
+        setConfirmDelete(false);
+        setError(result.error ?? "Κάτι πήγε στραβά.");
+      } else onClose();
     });
   }
 

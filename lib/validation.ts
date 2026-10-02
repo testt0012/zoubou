@@ -15,7 +15,7 @@ export function sanitizeName(raw: string): string | null {
   const trimmed = raw.trim().replace(/\s+/g, " ");
   if (trimmed.length < 1 || trimmed.length > 60) return null;
   // Greek and Latin letters, spaces, and common name punctuation.
-  if (!/^[A-Za-zΑ-Ωα-ωΆ-Ώά-ώ'\- ]+$/.test(trimmed)) return null;
+  if (!/^[A-Za-zΑ-Ωα-ωΆ-Ώΐά-ώ'’\- ]+$/.test(trimmed)) return null;
   return trimmed;
 }
 

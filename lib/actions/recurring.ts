@@ -144,10 +144,12 @@ export async function updateRecurringCustomer(
   return error ? storageError(error) : { success: true };
 }
 
-export async function deleteRecurringCustomer(id: string) {
+export async function deleteRecurringCustomer(id: string): Promise<RecurringCustomerResult> {
   const { supabase } = await requireAdmin();
-  if (!id) return;
-  await supabase.from("recurring_customers").delete().eq("id", id);
+  if (!id) return { success: false, error: "Ο πελάτης δεν βρέθηκε." };
+
+  const { error } = await supabase.from("recurring_customers").delete().eq("id", id);
+  return error ? { success: false, error: "Ο πελάτης δεν διαγράφηκε. Δοκιμάστε ξανά." } : { success: true };
 }
 
 // Postgres / PostgREST codes for "that column doesn't exist" — i.e.

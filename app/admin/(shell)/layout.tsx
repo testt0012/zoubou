@@ -1,5 +1,6 @@
 import AdminShell from "@/components/admin/AdminShell";
 import AdminDataProvider from "@/components/admin/AdminDataProvider";
+import AdminNoticeProvider from "@/components/admin/AdminNotice";
 
 // Scoped to the (shell) route group so it wraps dashboard/reports/
 // availability/services but not /admin/login — and, being an actual
@@ -10,7 +11,9 @@ import AdminDataProvider from "@/components/admin/AdminDataProvider";
 export default function AdminShellLayout({ children }: LayoutProps<"/admin">) {
   return (
     <AdminDataProvider>
-      <AdminShell>{children}</AdminShell>
+      <AdminNoticeProvider>
+        <AdminShell>{children}</AdminShell>
+      </AdminNoticeProvider>
     </AdminDataProvider>
   );
 }

@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/supabase/server";
 import { eachDate } from "@/lib/time";
 import { isValidDateString, isValidTimeString } from "@/lib/validation";
 import { isValidRange, mergeRanges, MAX_RANGES_PER_DAY, type TimeRange } from "@/lib/hours";
+import { logError } from "@/lib/errorLog";
+import type { ActionResult } from "@/lib/actions/types";
 
 const MAX_BLOCKED_RANGE_DAYS = 366;
 
@@ -41,10 +43,16 @@ export async function setWeekdayHours(
     .from("availability_rules")
     .select("weekday, start_time, end_time")
     .in("weekday", days);
-  if (readError) return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
+  if (readError) {
+    await logError("action/setWeekdayHours (read)", readError);
+    return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
+  }
 
   const { error: deleteError } = await supabase.from("availability_rules").delete().in("weekday", days);
-  if (deleteError) return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
+  if (deleteError) {
+    await logError("action/setWeekdayHours (delete)", deleteError);
+    return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
+  }
 
   if (merged.length === 0) return { success: true };
 
@@ -53,6 +61,7 @@ export async function setWeekdayHours(
   );
   const { error: insertError } = await supabase.from("availability_rules").insert(rows);
   if (insertError) {
+    await logError("action/setWeekdayHours (insert)", insertError);
     // Put the old hours back rather than leave those days closed.
     if (previous && previous.length > 0) await supabase.from("availability_rules").insert(previous);
     return { success: false, error: "Σφάλμα αποθήκευσης ωραρίου." };
@@ -66,37 +75,44 @@ export async function setWeekdayHours(
 // each day by hand — the blocked_slots table stays one row per day
 // underneath, so every existing read path (computeAvailableSlots, the
 // occupancy report) needs no changes.
-export async function addBlockedSlot(formData: FormData) {
+export async function addBlockedSlot(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireAdmin();
   const dateFrom = formData.get("dateFrom");
   const dateTo = formData.get("dateTo");
   const start_time = String(formData.get("start_time") ?? "");
   const end_time = String(formData.get("end_time") ?? "");
-  const reason = String(formData.get("reason") ?? "").trim() || null;
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 100) || null;
 
-  if (
-    !isValidDateString(dateFrom) ||
-    !isValidDateString(dateTo) ||
-    dateFrom > dateTo ||
-    !start_time ||
-    !end_time ||
-    start_time >= end_time
-  ) {
-    return;
+  if (!isValidDateString(dateFrom) || !isValidDateString(dateTo) || dateFrom > dateTo) {
+    return { success: false, error: "Επιλέξτε έγκυρες ημερομηνίες." };
+  }
+  if (!isValidTimeString(start_time) || !isValidTimeString(end_time) || start_time >= end_time) {
+    return { success: false, error: "Επιλέξτε έγκυρες ώρες." };
   }
 
   const dates = eachDate(dateFrom, dateTo);
-  if (dates.length > MAX_BLOCKED_RANGE_DAYS) return;
+  if (dates.length > MAX_BLOCKED_RANGE_DAYS) {
+    return { success: false, error: "Το διάστημα είναι πολύ μεγάλο (το πολύ ένα χρόνο)." };
+  }
 
-  await supabase
+  const { error } = await supabase
     .from("blocked_slots")
     .insert(dates.map((date) => ({ date, start_time, end_time, reason })));
+  if (error) {
+    await logError("action/addBlockedSlot", error);
+    return { success: false, error: "Δεν αποθηκεύτηκε. Δοκιμάστε ξανά." };
+  }
+  return { success: true };
 }
 
-export async function deleteBlockedSlot(formData: FormData) {
+export async function deleteBlockedSlot(id: string): Promise<ActionResult> {
   const { supabase } = await requireAdmin();
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
+  if (!id) return { success: false, error: "Η καταχώρηση δεν βρέθηκε." };
 
-  await supabase.from("blocked_slots").delete().eq("id", id);
+  const { error } = await supabase.from("blocked_slots").delete().eq("id", id);
+  if (error) {
+    await logError("action/deleteBlockedSlot", error);
+    return { success: false, error: "Δεν διαγράφηκε. Δοκιμάστε ξανά." };
+  }
+  return { success: true };
 }

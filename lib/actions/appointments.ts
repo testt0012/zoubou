@@ -5,6 +5,7 @@ import { isValidDateString, isValidTimeString, normalizeGreekMobile, sanitizeNam
 import { minutesToTime, timeToMinutes, todayAthens } from "@/lib/time";
 import { computeAvailableSlots, type SlotError } from "@/lib/slots";
 import { logError } from "@/lib/errorLog";
+import type { ActionResult } from "@/lib/actions/types";
 
 function slotErrorMessage(error: SlotError): string {
   return error === "unavailable" ? "Προσωρινό σφάλμα. Δοκιμάστε ξανά σε λίγο." : "Η υπηρεσία δεν βρέθηκε.";
@@ -13,14 +14,32 @@ function slotErrorMessage(error: SlotError): string {
 // Called directly from client code (not a <form action>) so the UI can
 // show an inline "Ακυρώθηκε — Αναίρεση" undo affordance instead of a
 // blocking confirm() dialog.
-export async function cancelAppointment(id: string) {
+export async function cancelAppointment(id: string): Promise<ActionResult> {
   const { supabase } = await requireAdmin();
-  await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
+  if (!id) return { success: false, error: "Το ραντεβού δεν βρέθηκε." };
+
+  const { error } = await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
+  if (error) {
+    await logError("action/cancelAppointment", error);
+    return { success: false, error: "Το ραντεβού δεν ακυρώθηκε. Δοκιμάστε ξανά." };
+  }
+  return { success: true };
 }
 
-export async function uncancelAppointment(id: string) {
+export async function uncancelAppointment(id: string): Promise<ActionResult> {
   const { supabase } = await requireAdmin();
-  await supabase.from("appointments").update({ status: "confirmed" }).eq("id", id);
+  if (!id) return { success: false, error: "Το ραντεβού δεν βρέθηκε." };
+
+  const { error } = await supabase.from("appointments").update({ status: "confirmed" }).eq("id", id);
+  if (error) {
+    // 23P01: the time was taken by someone else in the meantime.
+    if (error.code === "23P01") {
+      return { success: false, error: "Η ώρα έχει πιαστεί από άλλο ραντεβού — το ραντεβού δεν επανήλθε." };
+    }
+    await logError("action/uncancelAppointment", error);
+    return { success: false, error: "Η αναίρεση δεν έγινε. Δοκιμάστε ξανά." };
+  }
+  return { success: true };
 }
 
 // The admin's own view of a day's free times (manual booking, moving an

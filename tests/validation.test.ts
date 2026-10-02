@@ -17,6 +17,7 @@ test("anything that isn't a Greek mobile is refused", () => {
 test("names: letters, spaces, hyphen and apostrophe are kept; junk is refused", () => {
   assert.equal(sanitizeName("  Γιάννης  "), "Γιάννης");
   assert.equal(sanitizeName("Μαρία   Ελένη"), "Μαρία Ελένη");
+  assert.equal(sanitizeName("Μαΐα"), "Μαΐα");
   assert.equal(sanitizeName("Jean-Luc"), "Jean-Luc");
   assert.equal(sanitizeName("O'Brien"), "O'Brien");
   assert.equal(sanitizeName("Ιωάννου"), "Ιωάννου");

@@ -251,6 +251,29 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
     fetchAppointments,
   ]);
 
+  // The live connection stops while the phone sleeps or loses signal, and
+  // changes made in the meantime never replay: when the app comes back to the
+  // foreground (or the network returns) everything is read again.
+  useEffect(() => {
+    if (loading) return;
+    let lastRefresh = Date.now();
+    const refreshAll = () => {
+      if (document.visibilityState === "hidden" || Date.now() - lastRefresh < 5000) return;
+      lastRefresh = Date.now();
+      refetchServices();
+      refetchAvailabilityRules();
+      refetchBlockedSlots();
+      refetchRecurringCustomers();
+      fetchAppointments(rangeRef.current.from, rangeRef.current.to);
+    };
+    document.addEventListener("visibilitychange", refreshAll);
+    window.addEventListener("online", refreshAll);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshAll);
+      window.removeEventListener("online", refreshAll);
+    };
+  }, [loading, refetchServices, refetchAvailabilityRules, refetchBlockedSlots, refetchRecurringCustomers, fetchAppointments]);
+
   const value: AdminDataValue = {
     loading,
     services,

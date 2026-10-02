@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import SlideTransition from "@/components/admin/SlideTransition";
 import WeeklyHoursEditor from "@/components/admin/WeeklyHoursEditor";
 import AddBlockedSlotForm from "@/components/admin/AddBlockedSlotForm";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { deleteBlockedSlot } from "@/lib/actions/availability";
+import { useAdminNotice } from "@/components/admin/AdminNotice";
 import EmergencyClosureForm from "@/components/admin/EmergencyClosureForm";
 import { EMERGENCY_CLOSURE_REASON, FULL_DAY_END, FULL_DAY_START } from "@/lib/hours";
 import { formatDateLong } from "@/lib/time";
@@ -26,6 +28,21 @@ function closureHours(b: BlockedSlot): string {
 }
 
 function BlockedSlotList({ slots, detail }: { slots: BlockedSlot[]; detail?: (b: BlockedSlot) => string }) {
+  const notify = useAdminNotice();
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  async function handleDelete(id: string) {
+    if (deleting) return;
+    setDeleting(id);
+    try {
+      const result = await deleteBlockedSlot(id);
+      if (!result.success) notify(result.error ?? "Δεν διαγράφηκε.");
+    } catch {
+      notify("Δεν διαγράφηκε. Ελέγξτε τη σύνδεση και δοκιμάστε ξανά.");
+    }
+    setDeleting(null);
+  }
+
   return (
     <div className="flex flex-col gap-2 mb-3">
       {slots.map((b) => (
@@ -37,17 +54,16 @@ function BlockedSlotList({ slots, detail }: { slots: BlockedSlot[]; detail?: (b:
             <div className="font-medium">{formatDateLong(b.date)}</div>
             {detail && <div className="text-sm text-neutral-500">{detail(b)}</div>}
           </div>
-          <form action={deleteBlockedSlot} className="shrink-0">
-            <input type="hidden" name="id" value={b.id} />
-            <button
-              type="submit"
-              aria-label="Διαγραφή"
-              title="Διαγραφή"
-              className="flex items-center justify-center w-12 h-12 rounded-lg text-red-600"
-            >
-              <TrashIcon />
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={() => handleDelete(b.id)}
+            disabled={deleting !== null}
+            aria-label="Διαγραφή"
+            title="Διαγραφή"
+            className="shrink-0 flex items-center justify-center w-12 h-12 rounded-lg text-red-600 disabled:opacity-50"
+          >
+            <TrashIcon />
+          </button>
         </div>
       ))}
     </div>

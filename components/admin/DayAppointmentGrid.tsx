@@ -5,6 +5,7 @@ import AppointmentRow from "@/components/admin/AppointmentRow";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { RecurringCell } from "@/components/admin/RecurringCustomers";
 import { useRecurringVisits } from "@/components/admin/useRecurringVisits";
+import { useAdminNotice } from "@/components/admin/AdminNotice";
 import { uncancelAppointment } from "@/lib/actions/appointments";
 import { timeToMinutes } from "@/lib/time";
 import type { AppointmentWithService } from "@/types/database";
@@ -19,6 +20,7 @@ const UNDO_WINDOW_MS = 5000;
 export default function DayAppointmentGrid({ date }: { date: string }) {
   const { appointments, refreshAppointments } = useAdminData();
   const { entriesFor, customerById, serviceNames } = useRecurringVisits();
+  const notify = useAdminNotice();
 
   // Appointments cancelled a moment ago, kept here (not in the list the live
   // refresh rewrites) so the undo bar survives until its window runs out.
@@ -53,8 +55,14 @@ export default function DayAppointmentGrid({ date }: { date: string }) {
   function handleUndo(appointment: AppointmentWithService) {
     dismiss(appointment.id);
     startTransition(async () => {
-      await uncancelAppointment(appointment.id);
+      let result: { success: boolean; error?: string };
+      try {
+        result = await uncancelAppointment(appointment.id);
+      } catch {
+        result = { success: false, error: "Η αναίρεση δεν έγινε. Ελέγξτε τη σύνδεση και δοκιμάστε ξανά." };
+      }
       await refreshAppointments();
+      if (!result.success) notify(result.error ?? "Η αναίρεση δεν έγινε.");
     });
   }
 
@@ -99,7 +107,7 @@ export default function DayAppointmentGrid({ date }: { date: string }) {
         }
         if (item.appointment) {
           return (
-            <AppointmentRow key={item.appointment.id} appointment={item.appointment} index={i} onCancelled={handleCancelled} />
+            <AppointmentRow key={item.appointment.id} appointment={item.appointment} index={i} onCancelled={handleCancelled} onCancelFailed={(a) => dismiss(a.id)} />
           );
         }
         const customer = customerById.get(item.entry.id)!;

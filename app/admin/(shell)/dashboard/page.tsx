@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import SlideTransition from "@/components/admin/SlideTransition";
@@ -29,6 +29,13 @@ export default function AdminDashboardPage() {
   const { services, availabilityRules, blockedSlots, appointments, recurringCustomers, ensureAppointmentsRange } =
     useAdminData();
   const { takenMinutesFor, serviceNames } = useRecurringVisits();
+  // Re-render every minute, so "next appointment today" moves on by itself
+  // and the day rolls over if the app stays open past midnight.
+  const [, setMinute] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setMinute((m) => m + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const today = todayAthens();
 
   const rawWeekStart = searchParams.get("weekStart");

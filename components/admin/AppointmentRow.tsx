@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { cancelAppointment } from "@/lib/actions/appointments";
 import MoveAppointmentSheet from "@/components/admin/MoveAppointmentSheet";
+import { useAdminNotice } from "@/components/admin/AdminNotice";
 import type { AppointmentWithService } from "@/types/database";
 
 // Rendered as one cell in a 3-column grid — just the time, tap for a modal
@@ -15,11 +16,15 @@ export default function AppointmentRow({
   appointment,
   index = 0,
   onCancelled,
+  onCancelFailed,
 }: {
   appointment: AppointmentWithService;
   index?: number;
   onCancelled?: (appointment: AppointmentWithService) => void;
+  // The cancellation didn't go through: the undo bar shown for it has to go.
+  onCancelFailed?: (appointment: AppointmentWithService) => void;
 }) {
+  const notify = useAdminNotice();
   const [modalOpen, setModalOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [, startTransition] = useTransition();
@@ -27,8 +32,17 @@ export default function AppointmentRow({
   function handleCancel() {
     setModalOpen(false);
     onCancelled?.(appointment);
-    startTransition(() => {
-      cancelAppointment(appointment.id);
+    startTransition(async () => {
+      let result: { success: boolean; error?: string };
+      try {
+        result = await cancelAppointment(appointment.id);
+      } catch {
+        result = { success: false, error: "Το ραντεβού δεν ακυρώθηκε. Ελέγξτε τη σύνδεση και δοκιμάστε ξανά." };
+      }
+      if (!result.success) {
+        onCancelFailed?.(appointment);
+        notify(result.error ?? "Το ραντεβού δεν ακυρώθηκε.");
+      }
     });
   }
 

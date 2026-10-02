@@ -54,7 +54,15 @@ export function useAdminPush() {
     setBusy(true);
     try {
       const subscription = await subscribeToPush();
-      if (subscription) await subscribeAdminPush(subscription);
+      if (subscription) {
+        const saved = await subscribeAdminPush(subscription);
+        // Not stored on the server: leave the browser unsubscribed too, so the
+        // bell doesn't say "on" for a device that will never be notified.
+        if (!saved.success) {
+          const registration = await navigator.serviceWorker.ready;
+          await (await registration.pushManager.getSubscription())?.unsubscribe();
+        }
+      }
     } catch {
       // Fall through — the status re-read below reports what actually stuck.
     }

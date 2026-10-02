@@ -258,7 +258,6 @@ textarea {
    flipping them here turns every text-neutral-* / border-neutral-* /
    bg-neutral-* inside the scope; white backgrounds are flipped explicitly
    (text-white, used on the purple buttons, stays white). */
-.logo-dark { display: none; }
 .splash-themed { background: #fff; }
 
 @media (prefers-color-scheme: dark) {
@@ -303,8 +302,6 @@ textarea {
     background-color: #2a1215;
   }
 
-  .logo-light { display: none; }
-  .logo-dark { display: block; }
   .splash-themed { background: #000; }
   .splash-scissors [stroke="#262626"],
   .app-dark [stroke="#262626"] { stroke: #e5e5e5; }
